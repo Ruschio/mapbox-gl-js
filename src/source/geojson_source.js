@@ -192,7 +192,7 @@ class GeoJSONSource extends Evented implements Source {
     /**
      * Sets filter for the GeoJSON data source and re-renders the map.
      *
-     * @param {Array | string} filter An array for the filter expression.
+     * @param {Array} filter An array for the filter expression.
      * @returns {GeoJSONSource} Returns itself to allow for method chaining.
      * @example
      * map.addSource('source_id', {
@@ -225,8 +225,8 @@ class GeoJSONSource extends Evented implements Source {
      *     "Another Island"
      * ]);
      */
-    setFilter(filter: Array | string): this {
-        this.workerOptions = extend$1({ filter: filter }, this.workerOptions);
+    setFilter(filter: Array): this {
+        this.workerOptions = extend({filter: filter}, this.workerOptions);
         this._updateWorkerData();
         return this;
     }
