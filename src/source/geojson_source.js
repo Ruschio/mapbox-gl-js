@@ -226,7 +226,7 @@ class GeoJSONSource extends Evented implements Source {
      * ]);
      */
     setFilter(filter: Array): this {
-        this.workerOptions = extend({filter: filter}, this.workerOptions);
+        this.workerOptions = extend({filter}, this.workerOptions);
         this._updateWorkerData();
         return this;
     }
