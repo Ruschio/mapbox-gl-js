@@ -43,7 +43,8 @@ export type SymbolIconUniformsType = {|
     'u_up_vector': Uniform3f,
     'u_ecef_origin': Uniform3f,
     'u_texture': Uniform1i,
-    'u_icon_transition': Uniform1f
+    'u_icon_transition': Uniform1f,
+    'u_color_adj_mat': UniformMatrix4f,
 |};
 
 export type SymbolSDFUniformsType = {|
@@ -124,7 +125,8 @@ const symbolIconUniforms = (context: Context): SymbolIconUniformsType => ({
     'u_up_vector': new Uniform3f(context),
     'u_ecef_origin': new Uniform3f(context),
     'u_texture': new Uniform1i(context),
-    'u_icon_transition': new Uniform1f(context)
+    'u_icon_transition': new Uniform1f(context),
+    'u_color_adj_mat': new UniformMatrix4f(context)
 });
 
 const symbolSDFUniforms = (context: Context): SymbolSDFUniformsType => ({
@@ -198,7 +200,8 @@ const symbolIconUniformValues = (
     invMatrix: Float32Array,
     upVector: [number, number, number],
     projection: Projection,
-    transition: ?number
+    colorAdjustmentMatrix: ?Float32Array,
+    transition: ?number,
 ): UniformValues<SymbolIconUniformsType> => {
     const transform = painter.transform;
 
@@ -226,6 +229,7 @@ const symbolIconUniformValues = (
         'u_ecef_origin': [0, 0, 0],
         'u_tile_matrix': identityMatrix,
         'u_up_vector': [0, -1, 0],
+        'u_color_adj_mat': colorAdjustmentMatrix,
         'u_icon_transition': transition ? transition : 0.0
     };
 
@@ -240,6 +244,7 @@ const symbolIconUniformValues = (
         values['u_up_vector'] = upVector;
     }
 
+    /* $FlowFixMe[incompatible-return] */
     return values;
 };
 

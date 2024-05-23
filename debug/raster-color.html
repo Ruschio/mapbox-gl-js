@@ -9,6 +9,11 @@
         body { margin: 0; padding: 0; }
         html, body { height: 100%; }
         #map { height: calc(100% - 40px); }
+        #container {
+            position: absolute;
+            top: 1em;
+            left: 1em;
+        }
         #controls {
             position: fixed;
             z-index: 1;
@@ -33,6 +38,7 @@
 
 <body>
 <div id="map"></div>
+<div id='container'></div>
 <div id="controls"></div>
 <div id="gradientbg"><div id="gradient"></div></div>
 
@@ -63,6 +69,7 @@ const presets = {
 function GUIParams () {
     this.preset = "Satellite";
     this.opacity = 1;
+    this.elevation = 0;
     Object.assign(this, presets[this.preset]);
 }
 
@@ -194,7 +201,8 @@ function setStyle (tileset) {
             "source": "raster",
             "id": "raster",
             "paint": {
-                "raster-opacity": guiParams.opacity
+                "raster-opacity": guiParams.opacity,
+                "raster-elevation": guiParams.elevation
             }
         }]
     });
@@ -202,8 +210,10 @@ function setStyle (tileset) {
 
 var map = window.map = new mapboxgl.Map({
     container: "map",
+    devtools: true,
     style: {version: 8, layers: [], sources: {}},
     hash: true,
+    projection: 'globe',
     transformRequest (url, type) {
         if (type !== "Tile") return;
         const preset = presets[guiParams.preset];
@@ -214,7 +224,8 @@ var map = window.map = new mapboxgl.Map({
 });
 
 map.once("load", function () {
-    var gui = window.gui = new dat.GUI(); // eslint-disable-line
+    var gui = window.gui = new dat.GUI({autoPlace: false}); // eslint-disable-line
+    document.getElementById('container').appendChild(gui.domElement);
 
     const preset = gui.add(guiParams, "preset", Object.keys(presets));
     const tileset = gui.add(guiParams, "tileset", Object.keys(tilesets));
@@ -222,6 +233,7 @@ map.once("load", function () {
     const mix = gui.add(guiParams, "rasterColorMix", Object.keys(mixes));
     const range = gui.add(guiParams, "rasterColorRange", Object.keys(ranges));
     const opacity = gui.add(guiParams, "opacity", 0, 1);
+    const elevation = gui.add(guiParams, "elevation", 0, 10000000);
 
     function setColorScale(scale) {
         const range = ranges[guiParams.rasterColorRange];
@@ -272,7 +284,12 @@ map.once("load", function () {
         document.getElementById("gradient").style.opacity = opac;
     });
 
+    elevation.onChange(opac => {
+        map.setPaintProperty("raster", "raster-elevation", opac);
+    });
+
     setTileset(guiParams.tileset);
+    map.setFog({});
 });
 
 </script>

@@ -9,19 +9,19 @@ import TileBounds from './tile_bounds.js';
 import {ResourceType} from '../util/ajax.js';
 import browser from '../util/browser.js';
 import {cacheEntryPossiblyAdded} from '../util/tile_request_cache.js';
-import {DedupedRequest, loadVectorTile} from './vector_tile_worker_source.js';
+import {DedupedRequest, loadVectorTile} from './load_vector_tile.js';
 import {makeFQID} from '../util/fqid.js';
 
 import type {Source} from './source.js';
 import type {OverscaledTileID} from './tile_id.js';
-import type Map from '../ui/map.js';
+import type {Map} from '../ui/map.js';
 import type Dispatcher from '../util/dispatcher.js';
 import type Tile from './tile.js';
 import type {Callback} from '../types/callback.js';
 import type {Cancelable} from '../types/cancelable.js';
 import type {VectorSourceSpecification, PromoteIdSpecification} from '../style-spec/types.js';
 import type Actor from '../util/actor.js';
-import type {LoadVectorTileResult} from './vector_tile_worker_source.js';
+import type {LoadVectorTileResult} from './load_vector_tile.js';
 import type {WorkerTileResult} from './worker_source.js';
 
 /**
@@ -122,7 +122,7 @@ class VectorTileSource extends Evented implements Source {
                 if (tileJSON.bounds) this.tileBounds = new TileBounds(tileJSON.bounds, this.minzoom, this.maxzoom);
                 postTurnstileEvent(tileJSON.tiles, this.map._requestManager._customAccessToken);
 
-                // `content` is included here to prevent a race condition where `Style#_updateSources` is called
+                // `content` is included here to prevent a race condition where `Style#updateSources` is called
                 // before the TileJSON arrives. this makes sure the tiles needed are loaded once TileJSON arrives
                 // ref: https://github.com/mapbox/mapbox-gl-js/pull/4347#discussion_r104418088
                 this.fire(new Event('data', {dataType: 'source', sourceDataType: 'metadata'}));

@@ -2,11 +2,12 @@
 
 import StyleLayer from '../style_layer.js';
 import MercatorCoordinate from '../../geo/mercator_coordinate.js';
-import type Map from '../../ui/map.js';
+import type {Map} from '../../ui/map.js';
 import assert from 'assert';
+
 import type {ValidationErrors} from '../validate_style.js';
 import type {ProjectionSpecification} from '../../style-spec/types.js';
-import SourceCache from '../../source/source_cache.js';
+import type SourceCache from '../../source/source_cache.js';
 
 type CustomRenderMethod = (gl: WebGL2RenderingContext, matrix: Array<number>, projection: ?ProjectionSpecification, projectionToMercatorMatrix: ?Array<number>, projectionToMercatorTransition: ?number, centerInMercator: ?Array<number>, pixelsPerMeterRatio: ?number) => void;
 
@@ -195,8 +196,8 @@ class CustomStyleLayer extends StyleLayer {
 
     implementation: CustomLayerInterface;
 
-    constructor(implementation: CustomLayerInterface) {
-        super(implementation, {});
+    constructor(implementation: CustomLayerInterface, scope: string) {
+        super(implementation, {}, scope);
         this.implementation = implementation;
         if (implementation.slot) this.slot = implementation.slot;
     }
@@ -209,8 +210,7 @@ class CustomStyleLayer extends StyleLayer {
         return this.implementation.prerender !== undefined;
     }
 
-    // $FlowFixMe[method-unbinding]
-    isLayerDraped(_: ?SourceCache): boolean {
+    isDraped(_: ?SourceCache): boolean {
         return this.implementation.renderToTile !== undefined;
     }
 
@@ -224,8 +224,7 @@ class CustomStyleLayer extends StyleLayer {
         return false;
     }
 
-    // $FlowFixMe[incompatible-extend] - CustomStyleLayer is not serializable
-    serialize() {
+    serialize(): any {
         assert(false, "Custom layers cannot be serialized");
     }
 

@@ -1,3 +1,119 @@
+## 3.4.0-beta.1
+
+### Features and improvements ✨
+- Add `icon-color-saturation`, `icon-color-contrast`, `icon-color-brightness-min` and `icon-color-brightness-max` to control symbol layer appearance.
+- Introduce a new `line-join` mode: `none` to improve line pattern distortions around joins.
+- Extend `model-id` property to support URIs (in addition to style-defined model references).
+
+### Bug fixes 🐞
+- Respect padding in `cameraForBounds` on globe view. (h/t [@jonasnoki](https://github.com/jonasnoki)) [#13126](https://github.com/mapbox/mapbox-gl-js/pull/13126)
+- Fix `preloadOnly` not preloading tiles from style imports.
+- Fix `queryRenderedFeatures` for non-integer ID in non-tiled model sources
+- Fix `model-scale` property for large number of 3D models.
+- Fix flickering of `raster-particle` layer on globe view.
+- Improve rendering of low-resolution `raster-array` data.
+
+## 3.3.0
+
+### Features and improvements ✨
+
+- Add a new `raster-array` source type, representing a new experimental Mapbox Raster Tile format which encodes series of tiled raster data (such as weather time series).
+- Add a new `raster-particle` layer which animates particles of different speed and color based on underlying `raster-array` data.
+- Add `addImport`, `moveImport`, `updateImport`, and `removeImport` API methods.
+- Add `getSlot`, and `setSlot` API methods to control layers' slots.
+- Add landmarks and models support in `queryRenderedFeatures`.
+- Add `raster-elevation` support for tiled raster sources.
+- Add `config` expression support in fog.
+- Improve map loading performance.
+
+### Bug fixes 🐞
+
+- Fix zooming with the pitched camera and `maxZoom`.
+- Fix memory leak after removing the map. (h/t [@kamil-sienkiewicz-asi](https://github.com/kamil-sienkiewicz-asi)) [#13110](https://github.com/mapbox/mapbox-gl-js/pull/13110), [#13116](https://github.com/mapbox/mapbox-gl-js/pull/13116)
+- Fix broken horizon line for some camera values.
+- Fix broken globe draping after updating style with `setStyle`.
+- Fix the `z` offset when the opacity is evaluated at 0 on the zoom change.
+- Fix the `format` expression in the `config` expression.
+- Fix adding a marker to the map that is not loaded when fog is enabled.
+- Fix symbol and icon rendering order when using `symbol-sort-key` property.
+
+## 3.2.0
+
+### Features and improvements ✨
+
+- Improve map loading performance.
+- Add a debug UI for the development build of GL JS, enabled with `devtools: true` in `Map` options.
+- Add imports support in `map.areTilesLoaded`.
+- Add support of rotation of elevated raster layers.
+- Add support of negative values for `fill-extrusion-flood-light-ground-radius` property.
+- Improve visual cutoff behavior of buildings when using `fill-extrusion-cutoff-fade-range` property.
+
+### Bug fixes 🐞
+
+- Fix an issue where `map.flyTo` with `padding` option was setting and overriding map's padding.
+- Issue a warning instead of a validation error if `url` or `tiles` is missing from source, i.e. in MapTiler source.
+- Fix the moiré effects on patterns in tilted map views.
+- Remove role attribute for non-visible alerts. (h/t [@jakubmakielkowski](https://github.com/jakubmakielkowski)) [#13051](https://github.com/mapbox/mapbox-gl-js/pull/13051)
+- Fix an elevation of symbols above multiple fill extrusions, when some of them hidden or lowered.
+- Fix `config` expression chaining through nested styles and other issues related to config scope.
+- Fix a small callback-related memory leak. (h/t [@temas](https://github.com/temas)) [#13074](https://github.com/mapbox/mapbox-gl-js/pull/13074)
+- Fix `config` and `format` expressions not working together.
+
+
+## 3.1.2
+
+### Bug fixes 🐞
+
+- Fix attribution not being displayed for imported fragments (reintroducing the fix from v3.0.1 that was accidentally missing in v3.1.0).
+
+## 3.1.1
+
+### Bug fixes 🐞
+
+- Fix `fill-extrusions` not being displayed in alternative projections.
+- Fix an issue when WebGL might randomly crash to an unrecoverable state on some mobile devices, specifically Safari on iOS.
+
+## 3.1.0
+
+### Features and improvements ✨
+
+- Improve performance for maps with many textures (such as styles with satellite imagery), fixing excessive memory usage. (h/t [@tristan-morris](https://github.com/tristan-morris)) [#12924](https://github.com/mapbox/mapbox-gl-js/pull/12924)
+- Add `raster-elevation` property for elevating raster layers to a constant height (e.g. clouds over globe).
+- Add `raster-emissive-strength` and `fill-extrusion-emissive-strength` properties for controlling 3D lighting on buildings and raster layers.
+- Add `Map` `getConfigProperty` method for getting current style config values.
+- Add `config` support in terrain options.
+- Improve performance for pitched views with many fill extrusions on higher zoom levels.
+- Allow turning off the terrain that is defined in the imports on the root-level Style by setting it to `null`.
+- Allow the partial terrain exaggeration update without specifying the source.
+- Respect style schema restrictions (`minValue`, `maxValue`, `stepValue`, `values`, `type`) when evaluating config options.
+
+### Bug fixes 🐞
+
+- Fix an issue where `center: [0, 0]` and `zoom: 0` map options were ignored in favor of style settings.
+- Fix an issue with the camera not taking the short route when animating between locations across the anti-meridian.
+- Fix an issue where a style with imports sometimes loaded in incomplete state.
+- Fix an issue with rendering styles with nested imports.
+- Fix an issue with sources not reloading when changing language and worldview.
+- Fix an issue where updating a style fragment URL didn't work correctly.
+- Fix an issue when adding a layer with explicit `slot` not taking precedence over the `before` parameter for layer order.
+- Fix an issue where updating an image before initial image is loaded produced an error. (h/t [@maciejmatu](https://github.com/maciejmatu)) [#12928](https://github.com/mapbox/mapbox-gl-js/pull/12928)
+- Fix an issue with incorrect collisions for elevated symbols.
+- Fix an issue with `"camera-projection": "orthographic"` not working in styles with imports.
+- Fix an issue with tiles sometimes missing in terrain mode on views from a hill down on a valley.
+- Fix compact attribution style when using global CSS that sets `box-sizing: border-box`. (h/t [@simondriesen](https://github.com/simondriesen)) [#12982](https://github.com/mapbox/mapbox-gl-js/pull/12982)
+- Remove redundant `aria-label` attribute in attribution control that fails accessibility conformance. (h/t [@maggiewachs](https://github.com/maggiewachs)) [#12981](https://github.com/mapbox/mapbox-gl-js/pull/12981)
+- Disable terrain and hillshade when browser fingerprinting protection (e.g. in private browsing mode) prevents it from rendering correctly.
+- Fix layer rendering when import requests are failing.
+- Fix map `load` event not firing for the sources whose tiles are 404s.
+- Require either `url` or `tiles` for tiled sources during validation.
+- Validate for empty layer and source IDs in runtime.
+
+## 3.0.1
+
+### Bug fixes 🐞
+
+- Fix attribution not being displayed for imported fragments.
+
 ## 3.0.0
 
 Mapbox GL JS v3 enables the [Mapbox Standard Style](https://www.mapbox.com/blog/standard-core-style), a new realistic 3D lighting system, building shadows and many other visual enhancements, and an ergonomic API for using a new kind of rich, evolving, configurable map styles and seamless integration with custom data. You can get more information about the new features in the [Mapbox GL JS v3 migration guide](https://docs.mapbox.com/mapbox-gl-js/guides/migrate-to-v3/).

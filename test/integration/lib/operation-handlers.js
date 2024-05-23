@@ -27,9 +27,6 @@ export const operationHandlers = {
 
         waitForRender(map, () => map.loaded(), doneCb);
     },
-    idle(map, params, doneCb) {
-        waitForRender(map, () => !map.isMoving(), doneCb);
-    },
     sleep(map, params, doneCb) {
         setTimeout(doneCb, params[0]);
     },
@@ -183,6 +180,18 @@ export const operationHandlers = {
             doneCb();
         });
 
+    },
+    check(map, params, doneCb) {
+        // We still don't handle params[0] === "shadowPassVerticesCount" as lazy shadow map rendering is not implemented
+        if (params[0] === "renderedVerticesCount") {
+            const layer = map.getLayer(params[1]);
+            const layerStats = layer.getLayerRenderingStats();
+            const renderedVertices = params[0] === "renderedVerticesCount" ? layerStats.numRenderedVerticesInTransparentPass : layerStats.numRenderedVerticesInShadowPass;
+            if (renderedVertices !== params[2]) {
+                throw new Error(params[3]);
+            }
+        }
+        doneCb();
     }
 };
 

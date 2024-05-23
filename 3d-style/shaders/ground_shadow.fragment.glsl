@@ -1,25 +1,22 @@
 #include "_prelude_shadow.fragment.glsl"
 
-#ifdef GL_ES
 precision highp float;
-#endif
 
 uniform vec3 u_ground_shadow_factor;
 
-varying vec4 v_pos_light_view_0;
-varying vec4 v_pos_light_view_1;
-varying float v_depth;
+in vec4 v_pos_light_view_0;
+in vec4 v_pos_light_view_1;
 
 #ifdef FOG
-varying float v_fog_opacity;
+in float v_fog_opacity;
 #endif
 
 void main() {
-    float light = shadowed_light_factor(v_pos_light_view_0, v_pos_light_view_1, v_depth);
+    float light = shadowed_light_factor(v_pos_light_view_0, v_pos_light_view_1, 1.0 / gl_FragCoord.w);
     vec3 shadow = mix(u_ground_shadow_factor, vec3(1.0), light);
 
 #ifdef RENDER_CUTOFF
-    shadow = mix(vec3(1.0), shadow, cutoff_opacity(u_cutoff_params, v_depth));
+    shadow = mix(vec3(1.0), shadow, cutoff_opacity(u_cutoff_params, 1.0 / gl_FragCoord.w));
 #endif
 #ifdef FOG
     shadow = mix(shadow, vec3(1.0), v_fog_opacity);
@@ -29,5 +26,5 @@ void main() {
     shadow = mix(shadow, vec3(1.0), 1.0 - applyCutout(vec4(1.0)).r);
 #endif
 
-    gl_FragColor = vec4(shadow, 1.0);
+    glFragColor = vec4(shadow, 1.0);
 }

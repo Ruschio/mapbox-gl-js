@@ -12,8 +12,12 @@ import {
 } from '../util/util.js';
 import {number as interpolate} from '../style-spec/util/interpolate.js';
 import browser from '../util/browser.js';
-import LngLat, {earthRadius} from '../geo/lng_lat.js';
-import LngLatBounds from '../geo/lng_lat_bounds.js';
+import LngLat, {earthRadius, latLngToECEF, ecefToLatLng, LngLatBounds} from '../geo/lng_lat.js';
+import {
+    GLOBE_RADIUS,
+    GLOBE_ZOOM_THRESHOLD_MAX,
+    GLOBE_ZOOM_THRESHOLD_MIN
+} from '../geo/projection/globe_constants.js';
 import Point from '@mapbox/point-geometry';
 import {Event, Evented} from '../util/evented.js';
 import assert from 'assert';
@@ -25,30 +29,23 @@ import MercatorCoordinate, {
     latFromMercatorY,
     lngFromMercatorX
 } from '../geo/mercator_coordinate.js';
-import {
-    latLngToECEF,
-    ecefToLatLng,
-    GLOBE_RADIUS,
-    GLOBE_ZOOM_THRESHOLD_MAX,
-    GLOBE_ZOOM_THRESHOLD_MIN
-} from '../geo/projection/globe_util.js';
 import {vec3, vec4, mat4} from 'gl-matrix';
 import type {FreeCameraOptions} from './free_camera.js';
 import type Transform from '../geo/transform.js';
-import type {LngLatLike} from '../geo/lng_lat.js';
-import type {LngLatBoundsLike} from '../geo/lng_lat_bounds.js';
+import type {LngLatLike, LngLatBoundsLike} from '../geo/lng_lat.js';
 import type {ElevationQueryOptions} from '../terrain/elevation.js';
 import type {TaskID} from '../util/task_queue.js';
 import type {Callback} from '../types/callback.js';
-import type {PointLike} from '@mapbox/point-geometry';
+import type {PointLike} from '../types/point-like.js';
 import {Aabb} from '../util/primitives.js';
 import type {PaddingOptions} from '../geo/edge_insets.js';
 import type {MapEvent} from './events.js';
+import type {ObjMap} from '../types/obj-map.js';
 
 /**
  * A helper type: converts all Object type values to non-maybe types.
  */
-type Required<T> = $ObjMap<T, <V>(v: V) => $NonMaybeType<V>>;
+type Required<T> = ObjMap<T, <V>(v: V) => $NonMaybeType<V>>;
 
 /**
  * Options common to {@link Map#jumpTo}, {@link Map#easeTo}, and {@link Map#flyTo}, controlling the desired location,
@@ -59,15 +56,15 @@ type Required<T> = $ObjMap<T, <V>(v: V) => $NonMaybeType<V>>;
  * @property {LngLatLike} center The location to place at the screen center.
  * @property {number} zoom The desired zoom level.
  * @property {number} bearing The desired bearing in degrees. The bearing is the compass direction that
- *     is "up". For example, `bearing: 90` orients the map so that east is up.
+ * is "up". For example, `bearing: 90` orients the map so that east is up.
  * @property {number} pitch The desired pitch in degrees. The pitch is the angle towards the horizon
- *     measured in degrees with a range between 0 and 85 degrees. For example, pitch: 0 provides the appearance
- *     of looking straight down at the map, while pitch: 60 tilts the user's perspective towards the horizon.
- *     Increasing the pitch value is often used to display 3D objects.
+ * measured in degrees with a range between 0 and 85 degrees. For example, pitch: 0 provides the appearance
+ * of looking straight down at the map, while pitch: 60 tilts the user's perspective towards the horizon.
+ * Increasing the pitch value is often used to display 3D objects.
  * @property {LngLatLike} around The location serving as the origin for a change in `zoom`, `pitch` and/or `bearing`.
- *     This location will remain at the same screen position following the transform.
- *     This is useful for drawing attention to a location that is not in the screen center.
- *     `center` is ignored if `around` is included.
+ * This location will remain at the same screen position following the transform.
+ * This is useful for drawing attention to a location that is not in the screen center.
+ * `center` is ignored if `around` is included.
  * @property {PaddingOptions} padding Dimensions in pixels applied on each side of the viewport for shifting the vanishing point.
  * @example
  * // set the map's initial perspective with CameraOptions
@@ -107,29 +104,29 @@ export type FullCameraOptions = {
  * @typedef {Object} AnimationOptions
  * @property {number} duration The animation's duration, measured in milliseconds.
  * @property {Function} easing A function taking a time in the range 0..1 and returning a number where 0 is
- *     the initial state and 1 is the final state.
+ * the initial state and 1 is the final state.
  * @property {PointLike} offset The target center's offset relative to real map container center at the end of animation.
  * @property {boolean} animate If `false`, no animation will occur.
  * @property {boolean} essential If `true`, then the animation is considered essential and will not be affected by
- *     [`prefers-reduced-motion`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
+ * [`prefers-reduced-motion`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion).
  * @property {boolean} preloadOnly If `true`, it will trigger tiles loading across the animation path, but no animation will occur.
  * @property {number} curve The zooming "curve" that will occur along the
- *     flight path. A high value maximizes zooming for an exaggerated animation, while a low
- *     value minimizes zooming for an effect closer to {@link Map#easeTo}. 1.42 is the average
- *     value selected by participants in the user study discussed in
- *     [van Wijk (2003)](https://www.win.tue.nl/~vanwijk/zoompan.pdf). A value of
- *     `Math.pow(6, 0.25)` would be equivalent to the root mean squared average velocity. A
- *     value of 1 would produce a circular motion. If `minZoom` is specified, this option will be ignored.
+ * flight path. A high value maximizes zooming for an exaggerated animation, while a low
+ * value minimizes zooming for an effect closer to {@link Map#easeTo}. 1.42 is the average
+ * value selected by participants in the user study discussed in
+ * [van Wijk (2003)](https://www.win.tue.nl/~vanwijk/zoompan.pdf). A value of
+ * `Math.pow(6, 0.25)` would be equivalent to the root mean squared average velocity. A
+ * value of 1 would produce a circular motion. If `minZoom` is specified, this option will be ignored.
  * @property {number} minZoom The zero-based zoom level at the peak of the flight path. If
- *     this option is specified, `curve` will be ignored.
+ * this option is specified, `curve` will be ignored.
  * @property {number} speed The average speed of the animation defined in relation to
- *     `curve`. A speed of 1.2 means that the map appears to move along the flight path
- *     by 1.2 times `curve` screenfuls every second. A _screenful_ is the map's visible span.
- *     It does not correspond to a fixed physical distance, but varies by zoom level.
+ * `curve`. A speed of 1.2 means that the map appears to move along the flight path
+ * by 1.2 times `curve` screenfuls every second. A _screenful_ is the map's visible span.
+ * It does not correspond to a fixed physical distance, but varies by zoom level.
  * @property {number} screenSpeed The average speed of the animation measured in screenfuls
- *     per second, assuming a linear timing curve. If `speed` is specified, this option is ignored.
+ * per second, assuming a linear timing curve. If `speed` is specified, this option is ignored.
  * @property {number} maxDuration The animation's maximum duration, measured in milliseconds.
- *     If duration exceeds maximum duration, it resets to 0.
+ * If duration exceeds maximum duration, it resets to 0.
  * @see [Example: Slowly fly to a location](https://docs.mapbox.com/mapbox-gl-js/example/flyto-options/)
  * @see [Example: Customize camera animations](https://docs.mapbox.com/mapbox-gl-js/example/camera-animation/)
  * @see [Example: Navigate the map with game-like controls](https://docs.mapbox.com/mapbox-gl-js/example/game-controls/)
@@ -185,7 +182,6 @@ class Camera extends Evented {
     _zooming: boolean;
     _rotating: boolean;
     _pitching: boolean;
-    _padding: boolean;
 
     _bearingSnap: number;
     _easeStart: number;
@@ -196,11 +192,6 @@ class Camera extends Evented {
     _onEaseFrame: ?(_: number) => Transform | void;
     _onEaseEnd: ?(easeId?: string) => void;
     _easeFrameId: ?TaskID;
-
-    +_requestRenderFrame: (() => void) => TaskID;
-    +_cancelRenderFrame: (_: TaskID) => void;
-
-    +_preloadTiles: (transform: Transform | Array<Transform>, callback?: Callback<any>) => any;
 
     constructor(transform: Transform, options: {bearingSnap: number, respectPrefersReducedMotion?: boolean}) {
         super();
@@ -472,7 +463,7 @@ class Camera extends Evented {
      * @memberof Map#
      * @param {number} bearing The desired bearing.
      * @param {EasingOptions | null} options Options describing the destination and animation of the transition.
-     *     Accepts {@link CameraOptions} and {@link AnimationOptions}.
+     * Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires Map.event:movestart
      * @fires Map.event:moveend
@@ -494,7 +485,7 @@ class Camera extends Evented {
      *
      * @memberof Map#
      * @param {EasingOptions | null} options Options describing the destination and animation of the transition.
-     *     Accepts {@link CameraOptions} and {@link AnimationOptions}.
+     * Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires Map.event:movestart
      * @fires Map.event:moveend
@@ -513,7 +504,7 @@ class Camera extends Evented {
      *
      * @memberof Map#
      * @param {EasingOptions | null} options Options describing the destination and animation of the transition.
-     *     Accepts {@link CameraOptions} and {@link AnimationOptions}.
+     * Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires Map.event:movestart
      * @fires Map.event:moveend
@@ -537,7 +528,7 @@ class Camera extends Evented {
      *
      * @memberof Map#
      * @param {EasingOptions | null} options Options describing the destination and animation of the transition.
-     *     Accepts {@link CameraOptions} and {@link AnimationOptions}.
+     * Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires Map.event:movestart
      * @fires Map.event:moveend
@@ -589,8 +580,8 @@ class Camera extends Evented {
      *
      * @memberof Map#
      * @param {LngLatBoundsLike} bounds Calculate the center for these bounds in the viewport and use
-     *     the highest zoom level up to and including `Map#getMaxZoom()` that fits
-     *     in the viewport. LngLatBounds represent a box that is always axis-aligned with bearing 0.
+     * the highest zoom level up to and including `Map#getMaxZoom()` that fits
+     * in the viewport. LngLatBounds represent a box that is always axis-aligned with bearing 0.
      * @param {CameraOptions | null} options Options object.
      * @param {number | PaddingOptions} [options.padding] The amount of padding in pixels to add to the given bounds.
      * @param {number} [options.bearing=0] Desired map bearing at end of animation, in degrees.
@@ -598,7 +589,7 @@ class Camera extends Evented {
      * @param {PointLike} [options.offset=[0, 0]] The center of the given bounds relative to the map's center, measured in pixels.
      * @param {number} [options.maxZoom] The maximum zoom level to allow when the camera would transition to the specified bounds.
      * @returns {CameraOptions | void} If map is able to fit to provided bounds, returns `CameraOptions` with
-     *     `center`, `zoom`, and `bearing`. If map is unable to fit, method will warn and return undefined.
+     * `center`, `zoom`, and `bearing`. If map is unable to fit, method will warn and return undefined.
      * @example
      * const bbox = [[-79, 43], [-73, 45]];
      * const newCameraTransform = map.cameraForBounds(bbox, {
@@ -710,6 +701,8 @@ class Camera extends Evented {
 
         aabb = Aabb.applyTransform(aabb, mat4.multiply([], worldToCamera, aabbOrientation));
 
+        aabb = this._extendAABBWithPaddings(aabb, eOptions, tr, bearing);
+
         vec3.transformMat4(center, center, worldToCamera);
 
         const aabbHalfExtentZ = (aabb.max[2] - aabb.min[2]) * 0.5;
@@ -745,6 +738,42 @@ class Camera extends Evented {
         return {center: tr.center, zoom, bearing, pitch};
     }
 
+    _extendAABBWithPaddings(aabb: Aabb, eOptions: FullCameraOptions, tr: Transform, bearing: number): Aabb {
+        const size = vec3.sub([], aabb.max, aabb.min);
+
+        const screenPadL = tr.padding.left || 0;
+        const screenPadR = tr.padding.right || 0;
+        const screenPadB = tr.padding.bottom || 0;
+        const screenPadT = tr.padding.top || 0;
+
+        const {left: padL, right: padR, top: padT, bottom: padB} = eOptions.padding;
+
+        const halfScreenPadX = (screenPadL + screenPadR) * 0.5;
+        const halfScreenPadY = (screenPadT + screenPadB) * 0.5;
+
+        const scaleX = (tr.width - (screenPadL + screenPadR + padL + padR)) / size[0];
+        const scaleY = (tr.height - (screenPadB + screenPadT + padB + padT)) / size[1];
+
+        const zoomRef = Math.min(tr.scaleZoom(tr.scale * Math.min(scaleX, scaleY)), eOptions.maxZoom);
+
+        const scaleRatio = tr.scale / tr.zoomScale(zoomRef);
+
+        aabb = new Aabb(
+            [aabb.min[0] - (padL + halfScreenPadX) * scaleRatio, aabb.min[1] - (padB + halfScreenPadY) * scaleRatio, aabb.min[2]],
+            [aabb.max[0] + (padR + halfScreenPadX) * scaleRatio, aabb.max[1] + (padT + halfScreenPadY) * scaleRatio, aabb.max[2]]);
+
+        const centerOffset = (typeof eOptions.offset.x === 'number' && typeof eOptions.offset.y === 'number') ?
+            new Point(eOptions.offset.x, eOptions.offset.y) :
+            Point.convert(eOptions.offset);
+
+        const rotatedOffset = centerOffset.rotate(-degToRad(bearing));
+
+        aabb.center[0] -= rotatedOffset.x * scaleRatio;
+        aabb.center[1] += rotatedOffset.y * scaleRatio;
+
+        return aabb;
+    }
+
     /** @section {Querying features} */
 
     /**
@@ -757,7 +786,7 @@ class Camera extends Evented {
      * @param {LngLatLike} lnglat The geographical location at which to query.
      * @param {ElevationQueryOptions} [options] Options object.
      * @param {boolean} [options.exaggerated=true] When `true` returns the terrain elevation with the value of `exaggeration` from the style already applied.
-     *     When `false`, returns the raw value of the underlying data without styling applied.
+     * When `false`, returns the raw value of the underlying data without styling applied.
      * @returns {number | null} The elevation in meters.
      * @example
      * const coordinate = [-122.420679, 37.772537];
@@ -778,6 +807,7 @@ class Camera extends Evented {
      * the highest zoom level up to and including `Map#getMaxZoom()` that fits
      * the points in the viewport at the specified bearing.
      * @memberof Map#
+     * @param transform The current transform
      * @param {LngLatLike} p0 First point
      * @param {LngLatLike} p1 Second point
      * @param {number} bearing Desired map bearing at end of animation, in degrees
@@ -804,7 +834,6 @@ class Camera extends Evented {
 
         const tr = transform.clone();
         const eOptions = this._extendCameraOptions(options);
-        const edgePadding = tr.padding;
 
         tr.bearing = bearing;
         tr.pitch = pitch;
@@ -834,29 +863,9 @@ class Camera extends Evented {
 
         aabb = Aabb.applyTransform(aabb, worldToCamera);
 
+        aabb = this._extendAABBWithPaddings(aabb, eOptions, tr, bearing);
+
         const size = vec3.sub([], aabb.max, aabb.min);
-
-        const screenPadL = edgePadding.left || 0;
-        const screenPadR = edgePadding.right || 0;
-        const screenPadB = edgePadding.bottom || 0;
-        const screenPadT = edgePadding.top || 0;
-
-        const {left: padL, right: padR, top: padT, bottom: padB} = eOptions.padding;
-
-        const halfScreenPadX = (screenPadL + screenPadR) * 0.5;
-        const halfScreenPadY = (screenPadT + screenPadB) * 0.5;
-
-        const scaleX = (tr.width - (screenPadL + screenPadR + padL + padR)) / size[0];
-        const scaleY = (tr.height - (screenPadB + screenPadT + padB + padT)) / size[1];
-
-        const zoomRef = Math.min(tr.scaleZoom(tr.scale * Math.min(scaleX, scaleY)), eOptions.maxZoom);
-
-        const scaleRatio = tr.scale / tr.zoomScale(zoomRef);
-
-        aabb = new Aabb(
-            [aabb.min[0] - (padL + halfScreenPadX) * scaleRatio, aabb.min[1] - (padB + halfScreenPadY) * scaleRatio, aabb.min[2]],
-            [aabb.max[0] + (padR + halfScreenPadX) * scaleRatio, aabb.max[1] + (padT + halfScreenPadY) * scaleRatio, aabb.max[2]]);
-
         const aabbHalfExtentZ = size[2] * 0.5;
         const frustumDistance = this._minimumAABBFrustumDistance(tr, aabb);
 
@@ -867,15 +876,6 @@ class Camera extends Evented {
 
         const offset = vec3.scale([], normalZ, frustumDistance + aabbHalfExtentZ);
         const cameraPosition = vec3.add([], aabb.center, offset);
-
-        const centerOffset = (typeof eOptions.offset.x === 'number' && typeof eOptions.offset.y === 'number') ?
-            new Point(eOptions.offset.x, eOptions.offset.y) :
-            Point.convert(eOptions.offset);
-
-        const rotatedOffset = centerOffset.rotate(-degToRad(bearing));
-
-        aabb.center[0] -= rotatedOffset.x * scaleRatio;
-        aabb.center[1] += rotatedOffset.y * scaleRatio;
 
         vec3.transformMat4(aabb.center, aabb.center, cameraToWorld);
         vec3.transformMat4(cameraPosition, cameraPosition, cameraToWorld);
@@ -906,14 +906,14 @@ class Camera extends Evented {
      *
      * @memberof Map#
      * @param {LngLatBoundsLike} bounds Center these bounds in the viewport and use the highest
-     *     zoom level up to and including `Map#getMaxZoom()` that fits them in the viewport.
+     * zoom level up to and including `Map#getMaxZoom()` that fits them in the viewport.
      * @param {Object} [options] Options supports all properties from {@link AnimationOptions} and {@link CameraOptions} in addition to the fields below.
      * @param {number | PaddingOptions} [options.padding] The amount of padding in pixels to add to the given bounds.
      * @param {number} [options.pitch=0] Desired map pitch at end of animation, in degrees.
      * @param {number} [options.bearing=0] Desired map bearing at end of animation, in degrees.
      * @param {boolean} [options.linear=false] If `true`, the map transitions using
-     *     {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
-     *     those functions and {@link AnimationOptions} for information about options available.
+     * {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
+     * those functions and {@link AnimationOptions} for information about options available.
      * @param {Function} [options.easing] An easing function for the animated transition. See {@link AnimationOptions}.
      * @param {PointLike} [options.offset=[0, 0]] The center of the given bounds relative to the map's center, measured in pixels.
      * @param {number} [options.maxZoom] The maximum zoom level to allow when the map view transitions to the specified bounds.
@@ -943,11 +943,11 @@ class Camera extends Evented {
      * @param {PointLike} p1 Second point on screen, in pixel coordinates.
      * @param {number} bearing Desired map bearing at end of animation, in degrees.
      * @param {EasingOptions | null} options Options object.
-     *     Accepts {@link CameraOptions} and {@link AnimationOptions}.
+     * Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param {number | PaddingOptions} [options.padding] The amount of padding in pixels to add to the given bounds.
      * @param {boolean} [options.linear=false] If `true`, the map transitions using
-     *     {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
-     *     those functions and {@link AnimationOptions} for information about options available.
+     * {@link Map#easeTo}. If `false`, the map transitions using {@link Map#flyTo}. See
+     * those functions and {@link AnimationOptions} for information about options available.
      * @param {number} [options.pitch=0] Desired map pitch at end of animation, in degrees.
      * @param {Function} [options.easing] An easing function for the animated transition. See {@link AnimationOptions}.
      * @param {PointLike} [options.offset=[0, 0]] The center of the given bounds relative to the map's center, measured in pixels.
@@ -1217,7 +1217,7 @@ class Camera extends Evented {
      *
      * @memberof Map#
      * @param {EasingOptions} options Options describing the destination and animation of the transition.
-     *     Accepts {@link CameraOptions} and {@link AnimationOptions}.
+     * Accepts {@link CameraOptions} and {@link AnimationOptions}.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires Map.event:movestart
      * @fires Map.event:zoomstart
@@ -1365,7 +1365,6 @@ class Camera extends Evented {
         this._zooming = zoomChanged;
         this._rotating = bearingChanged;
         this._pitching = pitchChanged;
-        this._padding = paddingChanged;
 
         this._easeId = options.easeId;
         this._prepareEase(eventData, options.noMoveStart, currently);
@@ -1430,7 +1429,6 @@ class Camera extends Evented {
         this._zooming = false;
         this._rotating = false;
         this._pitching = false;
-        this._padding = false;
 
         if (wasZooming) {
             this.fire(new Event('zoomend', eventData));
@@ -1455,25 +1453,25 @@ class Camera extends Evented {
      *
      * @memberof Map#
      * @param {Object} options Options describing the destination and animation of the transition.
-     *     Accepts {@link CameraOptions}, {@link AnimationOptions},
-     *     and the following additional options.
+     * Accepts {@link CameraOptions}, {@link AnimationOptions},
+     * and the following additional options.
      * @param {number} [options.curve=1.42] The zooming "curve" that will occur along the
-     *     flight path. A high value maximizes zooming for an exaggerated animation, while a low
-     *     value minimizes zooming for an effect closer to {@link Map#easeTo}. 1.42 is the average
-     *     value selected by participants in the user study discussed in
-     *     [van Wijk (2003)](https://www.win.tue.nl/~vanwijk/zoompan.pdf). A value of
-     *     `Math.pow(6, 0.25)` would be equivalent to the root mean squared average velocity. A
-     *     value of 1 would produce a circular motion. If `options.minZoom` is specified, this option will be ignored.
+     * flight path. A high value maximizes zooming for an exaggerated animation, while a low
+     * value minimizes zooming for an effect closer to {@link Map#easeTo}. 1.42 is the average
+     * value selected by participants in the user study discussed in
+     * [van Wijk (2003)](https://www.win.tue.nl/~vanwijk/zoompan.pdf). A value of
+     * `Math.pow(6, 0.25)` would be equivalent to the root mean squared average velocity. A
+     * value of 1 would produce a circular motion. If `options.minZoom` is specified, this option will be ignored.
      * @param {number} [options.minZoom] The zero-based zoom level at the peak of the flight path. If
-     *     this option is specified, `options.curve` will be ignored.
+     * this option is specified, `options.curve` will be ignored.
      * @param {number} [options.speed=1.2] The average speed of the animation defined in relation to
-     *     `options.curve`. A speed of 1.2 means that the map appears to move along the flight path
-     *     by 1.2 times `options.curve` screenfuls every second. A _screenful_ is the map's visible span.
-     *     It does not correspond to a fixed physical distance, but varies by zoom level.
+     * `options.curve`. A speed of 1.2 means that the map appears to move along the flight path
+     * by 1.2 times `options.curve` screenfuls every second. A _screenful_ is the map's visible span.
+     * It does not correspond to a fixed physical distance, but varies by zoom level.
      * @param {number} [options.screenSpeed] The average speed of the animation measured in screenfuls
-     *     per second, assuming a linear timing curve. If `options.speed` is specified, this option is ignored.
+     * per second, assuming a linear timing curve. If `options.speed` is specified, this option is ignored.
      * @param {number} [options.maxDuration] The animation's maximum duration, measured in milliseconds.
-     *     If duration exceeds maximum duration, it resets to 0.
+     * If duration exceeds maximum duration, it resets to 0.
      * @param {Object | null} eventData Additional properties to be added to event objects of events triggered by this method.
      * @fires Map.event:movestart
      * @fires Map.event:zoomstart
@@ -1530,19 +1528,25 @@ class Camera extends Evented {
         const tr = this.transform,
             startZoom = this.getZoom(),
             startBearing = this.getBearing(),
-            startPitch = this.getPitch(),
-            startPadding = this.getPadding();
+            startPitch = this.getPitch();
 
         const zoom = 'zoom' in options ? clamp(+options.zoom, tr.minZoom, tr.maxZoom) : startZoom;
         const bearing = 'bearing' in options ? this._normalizeBearing(options.bearing, startBearing) : startBearing;
         const pitch = 'pitch' in options ? +options.pitch : startPitch;
-        const padding = 'padding' in options ? options.padding : tr.padding;
 
         const scale = tr.zoomScale(zoom - startZoom);
         const offsetAsPoint = Point.convert(options.offset);
-        let pointAtOffset = tr.centerPoint.add(offsetAsPoint);
+        const pointAtOffset = tr.centerPoint.add(offsetAsPoint);
         const locationAtOffset = tr.pointLocation(pointAtOffset);
-        const center = LngLat.convert(options.center || locationAtOffset);
+
+        let center = options.center;
+        // Calculate center with respect to padding
+        if (center && options.padding) {
+            const easingOptions = this._cameraForBounds(this.transform, center, center, bearing, pitch, options);
+            if (easingOptions) center = easingOptions.center;
+        }
+
+        center = LngLat.convert(center || locationAtOffset);
         this._normalizeCenter(center);
 
         const from = tr.project(locationAtOffset);
@@ -1628,7 +1632,6 @@ class Camera extends Evented {
         const zoomChanged = true;
         const bearingChanged = (startBearing !== bearing);
         const pitchChanged = (pitch !== startPitch);
-        const paddingChanged = !tr.isPaddingEqual(padding);
 
         const frame = (tr: Transform) => (k: number) => {
             // s: The distance traveled along the flight path, measured in ρ-screenfuls.
@@ -1641,12 +1644,6 @@ class Camera extends Evented {
             }
             if (pitchChanged) {
                 tr.pitch = interpolate(startPitch, pitch, k);
-            }
-            if (paddingChanged) {
-                tr.interpolatePadding(startPadding, padding, k);
-                // When padding is being applied, Transform#centerPoint is changing continuously,
-                // thus we need to recalculate offsetPoint every frame
-                pointAtOffset = tr.centerPoint.add(offsetAsPoint);
             }
 
             const newCenter = k === 1 ? center : tr.unproject(from.add(delta.mult(u(s))).mult(scale));
@@ -1669,7 +1666,6 @@ class Camera extends Evented {
         this._zooming = zoomChanged;
         this._rotating = bearingChanged;
         this._pitching = pitchChanged;
-        this._padding = paddingChanged;
 
         this._prepareEase(eventData, false);
         this._ease(frame(tr), () => this._afterEase(eventData), options);
@@ -1692,6 +1688,12 @@ class Camera extends Evented {
     stop(): this {
         return this._stop();
     }
+
+    // $FlowFixMe[incompatible-return] - No-op in the Camera class, implemented by the Map class
+    _requestRenderFrame(_callback: () => void): TaskID {}
+
+    // No-op in the Camera class, implemented by the Map class
+    _cancelRenderFrame(_: TaskID): void {}
 
     _stop(allowGestures?: boolean, easeId?: string): this {
         if (this._easeFrameId) {
@@ -1757,7 +1759,9 @@ class Camera extends Evented {
     // interpolating between the two endpoints will cross it.
     _normalizeCenter(center: LngLat) {
         const tr = this.transform;
-        if (!tr.renderWorldCopies || tr.maxBounds) return;
+        if (tr.maxBounds) return;
+        const isGlobe = tr.projection.name === 'globe';
+        if (!isGlobe && !tr.renderWorldCopies) return;
 
         const delta = center.lng - tr.center.lng;
         center.lng +=
@@ -1785,6 +1789,9 @@ class Camera extends Evented {
 
         return transforms;
     }
+
+    // No-op in the Camera class, implemented by the Map class
+    _preloadTiles(_transform: Transform | Array<Transform>, _callback?: Callback<any>): any {}
 }
 
 // In debug builds, check that camera change events are fired in the correct order.

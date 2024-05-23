@@ -1,5 +1,4 @@
 // @flow
-/* global self: false */
 /* eslint-disable new-cap */
 
 import config from '../../src/util/config.js';
@@ -8,15 +7,19 @@ import Dispatcher from '../../src/util/dispatcher.js';
 import getWorkerPool from '../../src/util/global_worker_pool.js';
 import {Evented} from '../../src/util/evented.js';
 import {isWorker, warnOnce} from '../../src/util/util.js';
-import window from '../../src/util/window.js';
 import assert from 'assert';
 import {DracoDecoderModule} from './draco_decoder_gltf.js';
+import {MeshoptDecoder} from './meshopt_decoder.js';
+
+import type {Class} from '../../src/types/class.js';
 
 let dispatcher = null;
 
 let dracoLoading: Promise<any> | void;
 let dracoUrl: ?string;
 let draco: any;
+let meshoptUrl: ?string;
+let meshopt: any;
 
 export function getDracoUrl(): string {
     if (isWorker() && self.worker && self.worker.dracoUrl) {
@@ -46,6 +49,41 @@ function waitForDraco() {
     return dracoLoading.then((module) => {
         draco = module;
         dracoLoading = undefined;
+    });
+}
+
+export function getMeshoptUrl(): string {
+    if (isWorker() && self.worker && self.worker.meshoptUrl) {
+        return self.worker.meshoptUrl;
+    }
+
+    if (meshoptUrl) return meshoptUrl;
+
+    const detector = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 3, 2, 0, 0, 5, 3, 1, 0, 1, 12, 1, 0, 10, 22, 2, 12, 0, 65, 0, 65, 0, 65, 0, 252, 10, 0, 0, 11, 7, 0, 65, 0, 253, 15, 26, 11]);
+
+    if (typeof WebAssembly !== 'object') {
+        throw new Error("WebAssembly not supported, cannot instantiate meshoptimizer");
+    }
+
+    meshoptUrl = WebAssembly.validate(detector) ? config.MESHOPT_SIMD_URL : config.MESHOPT_URL;
+
+    return meshoptUrl;
+}
+
+export function setMeshoptUrl(url: string) {
+    meshoptUrl = browser.resolveURL(url);
+    if (!dispatcher) {
+        dispatcher = new Dispatcher(getWorkerPool(), new Evented());
+    }
+    // Sets the Meshopt URL in all workers.
+    dispatcher.broadcast('setMeshoptUrl', meshoptUrl);
+}
+
+function waitForMeshopt() {
+    if (meshopt) return;
+    const decoder = MeshoptDecoder(fetch(getMeshoptUrl()));
+    return decoder.ready.then(() => {
+        meshopt = decoder;
     });
 }
 
@@ -165,6 +203,26 @@ function loadDracoMesh(primitive: GLTFPrimitive, gltf: any) {
     delete primitive.extensions[DRACO_EXT];
 }
 
+const MESHOPT_EXT = 'EXT_meshopt_compression';
+
+function loadMeshoptBuffer(bufferView: any, gltf: any) {
+
+    if (!(bufferView.extensions && bufferView.extensions[ MESHOPT_EXT ])) return;
+    const config = bufferView.extensions[ MESHOPT_EXT ];
+    const byteOffset = config.byteOffset || 0;
+    const byteLength = config.byteLength || 0;
+
+    const buffer = gltf.buffers[config.buffer];
+    const source = new Uint8Array(buffer, byteOffset, byteLength);
+    const target = new Uint8Array(config.count * config.byteStride);
+    meshopt.decodeGltfBuffer(target, config.count, config.byteStride, source, config.mode, config.filter);
+    bufferView.buffer = gltf.buffers.length;
+    bufferView.byteOffset = 0;
+    gltf.buffers[bufferView.buffer] = target.buffer;
+
+    delete bufferView.extensions[MESHOPT_EXT];
+}
+
 const MAGIC_GLTF = 0x46546C67;
 const GLB_CHUNK_TYPE_JSON = 0x4E4F534A;
 const GLB_CHUNK_TYPE_BIN = 0x004E4942;
@@ -195,14 +253,15 @@ function loadImage(img: {uri?: string, bufferView?: number, mimeType: string}, g
         const uri = resolveUrl(img.uri, baseUrl);
         return fetch(uri)
             .then(response => response.blob())
-            .then(blob => window.createImageBitmap(blob))
+            // $FlowFixMe https://github.com/facebook/flow/pull/7483
+            .then(blob => createImageBitmap(blob))
             .then(imageBitmap => {
                 gltf.images[index] = imageBitmap;
             });
     } else if (img.bufferView !== undefined) {
         const bytes = getGLTFBytes(gltf, img.bufferView);
-        const blob = new window.Blob([bytes], {type: img.mimeType});
-        return window.createImageBitmap(blob)
+        const blob = new Blob([bytes], {type: img.mimeType});
+        return createImageBitmap(blob)
             .then(imageBitmap => {
                 gltf.images[index] = imageBitmap;
             });
@@ -237,8 +296,7 @@ export function decodeGLTF(arrayBuffer: ArrayBuffer, byteOffset: number = 0, bas
         gltf.json = JSON.parse(textDecoder.decode(new Uint8Array(arrayBuffer, byteOffset)));
     }
 
-    const {buffers, images, meshes, extensionsUsed} = (gltf.json: any);
-
+    const {buffers, images, meshes, extensionsUsed, bufferViews} = (gltf.json: any);
     let bufferLoadsPromise: Promise<any> = Promise.resolve();
     if (buffers) {
         const bufferLoads = [];
@@ -258,8 +316,13 @@ export function decodeGLTF(arrayBuffer: ArrayBuffer, byteOffset: number = 0, bas
         const assetLoads = [];
 
         const dracoUsed = extensionsUsed && extensionsUsed.includes(DRACO_EXT);
+        const meshoptUsed = extensionsUsed && extensionsUsed.includes(MESHOPT_EXT);
         if (dracoUsed) {
             assetLoads.push(waitForDraco());
+        }
+
+        if (meshoptUsed) {
+            assetLoads.push(waitForMeshopt());
         }
         if (images) {
             for (let i = 0; i < images.length; i++) {
@@ -277,6 +340,12 @@ export function decodeGLTF(arrayBuffer: ArrayBuffer, byteOffset: number = 0, bas
                     for (const primitive of primitives) {
                         loadDracoMesh(primitive, gltf);
                     }
+                }
+            }
+
+            if (meshoptUsed && meshes && bufferViews) {
+                for (const bufferView of bufferViews) {
+                    loadMeshoptBuffer(bufferView, gltf);
                 }
             }
 

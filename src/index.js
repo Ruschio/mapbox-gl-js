@@ -6,7 +6,7 @@ import assert from 'assert';
 import {supported} from '@mapbox/mapbox-gl-supported';
 
 import {version} from '../package.json';
-import Map from './ui/map.js';
+import {Map} from './ui/map.js';
 import NavigationControl from './ui/control/navigation_control.js';
 import GeolocateControl from './ui/control/geolocate_control.js';
 import AttributionControl from './ui/control/attribution_control.js';
@@ -15,8 +15,7 @@ import FullscreenControl from './ui/control/fullscreen_control.js';
 import Popup from './ui/popup.js';
 import Marker from './ui/marker.js';
 import Style from './style/style.js';
-import LngLat from './geo/lng_lat.js';
-import LngLatBounds from './geo/lng_lat_bounds.js';
+import LngLat, {LngLatBounds} from './geo/lng_lat.js';
 import Point from '@mapbox/point-geometry';
 import MercatorCoordinate from './geo/mercator_coordinate.js';
 import {Evented} from './util/evented.js';
@@ -25,11 +24,12 @@ import {Debug} from './util/debug.js';
 import {isSafari} from './util/util.js';
 import {setRTLTextPlugin, getRTLTextPluginStatus} from './source/rtl_text_plugin.js';
 import WorkerPool from './util/worker_pool.js';
+import WorkerClass from './util/worker_class.js';
 import {prewarm, clearPrewarmedResources} from './util/global_worker_pool.js';
 import {clearTileCache} from './util/tile_request_cache.js';
 import {WorkerPerformanceUtils} from './util/worker_performance_utils.js';
 import {FreeCameraOptions} from './ui/free_camera.js';
-import {getDracoUrl, setDracoUrl} from '../3d-style/util/loaders.js';
+import {getDracoUrl, setDracoUrl, setMeshoptUrl, getMeshoptUrl} from '../3d-style/util/loaders.js';
 import browser from './util/browser.js';
 
 const exported = {
@@ -195,7 +195,13 @@ const exported = {
      * ...
      * </script>
      */
-    workerUrl: '',
+    get workerUrl(): string {
+        return WorkerClass.workerUrl;
+    },
+
+    set workerUrl(url: string) {
+        WorkerClass.workerUrl = url;
+    },
 
     /**
      * Provides an interface for external module bundlers such as Webpack or Rollup to package
@@ -211,7 +217,21 @@ const exported = {
      *
      * mapboxgl.workerClass = MapboxGLWorker;
      */
-    workerClass: null,
+    get workerClass(): Object {
+        return WorkerClass.workerClass;
+    },
+
+    set workerClass(klass: Object) {
+        WorkerClass.workerClass = klass;
+    },
+
+    get workerParams(): Object {
+        return WorkerClass.workerParams;
+    },
+
+    set workerParams(params: Object) {
+        WorkerClass.workerParams = params;
+    },
 
     /**
      * Provides an interface for loading Draco decoding library (draco_decoder_gltf.wasm v1.5.6) from a self-hosted URL.
@@ -236,6 +256,14 @@ const exported = {
 
     set dracoUrl(url: string) {
         setDracoUrl(url);
+    },
+
+    get meshoptUrl(): string {
+        return getMeshoptUrl();
+    },
+
+    set meshoptUrl(url: string) {
+        setMeshoptUrl(url);
     },
 
     /**
@@ -269,9 +297,9 @@ Debug.extend(exported, {isSafari, getPerformanceMetrics: PerformanceUtils.getPer
  * @function supported
  * @param {Object} [options]
  * @param {boolean} [options.failIfMajorPerformanceCaveat=false] If `true`,
- *     the function will return `false` if the performance of Mapbox GL JS would
- *     be dramatically worse than expected (for example, a software WebGL renderer
- *     would be used).
+ * the function will return `false` if the performance of Mapbox GL JS would
+ * be dramatically worse than expected (for example, a software WebGL renderer
+ * would be used).
  * @return {boolean}
  * @example
  * // Show an alert if the browser does not support Mapbox GL
@@ -289,7 +317,7 @@ Debug.extend(exported, {isSafari, getPerformanceMetrics: PerformanceUtils.getPer
  * @param {string} pluginURL URL pointing to the Mapbox RTL text plugin source.
  * @param {Function} callback Called with an error argument if there is an error, or no arguments if the plugin loads successfully.
  * @param {boolean} lazy If set to `true`, MapboxGL will defer loading the plugin until right-to-left text is encountered, and
- *     right-to-left text will be rendered only after the plugin finishes loading.
+ * right-to-left text will be rendered only after the plugin finishes loading.
  * @example
  * mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.0/mapbox-gl-rtl-text.js');
  * @see [Example: Add support for right-to-left scripts](https://www.mapbox.com/mapbox-gl-js/example/mapbox-gl-rtl-text/)

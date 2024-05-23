@@ -31,7 +31,11 @@ const todo = [
     "render-tests/model-layer/landmark-conflation-buckingham",
 
     // https://mapbox.atlassian.net/browse/MAPS3D-987
-    "render-tests/model-layer/landmark-shadows-terrain"
+    "render-tests/model-layer/landmark-shadows-terrain",
+
+    // Needs port from Native
+    // https://mapbox.atlassian.net/browse/MAPS3D-1331
+    "render-tests/model-layer/landmark-shadows-cutoff-range"
 ];
 
 const skip = [
@@ -75,9 +79,6 @@ const skip = [
     "render-tests/text-variable-anchor/avoid-edges-tile-map-mode",
     "render-tests/text-variable-anchor/left-top-right-bottom-offset-tile-map-mode",
     "render-tests/tile-mode/streets-v11",
-
-    // Text drawn over icons
-    "render-tests/symbol-sort-key/text-ignore-placement",
 
     // Non-deterministiic when rendered in browser
     "render-tests/text-variable-anchor/pitched-rotated-debug",
@@ -172,6 +173,9 @@ const skip = [
     "render-tests/model-layer/landmark-terrain",
     "render-tests/model-layer/lighting-3d-mode/shadow",
     "render-tests/model-layer/landmark-conflation-multiple-sources",
+    "render-tests/model-layer/landmark-shadow-skip-render",
+    "render-tests/model-layer/landmark-multiple-model-layers-z-offset-hide-evaluated",
+    "render-tests/model-layer/landmark-shadows-opacity-cutoff-range",
 
     // Not implemented in gl-js
     "render-tests/fill-extrusion-partial-rendering/partial-rendering-0",
@@ -180,7 +184,14 @@ const skip = [
     "render-tests/fill-extrusion-partial-rendering/partial-rendering-3",
 
     // Flaky in CI, covered by unit tests
-    "render-tests/terrain/camera-placement/elevation-not-yet-available"
+    "render-tests/terrain/camera-placement/elevation-not-yet-available",
+
+    // Flaky, https://mapbox.atlassian.net/browse/GLJS-608
+    "render-tests/model-layer/terrain-2-wheels-stunt",
+    "render-tests/model-layer/multiple-models-terrain",
+
+    // The algorithm for raster colour gradient texels stretching needs an adjustment
+    "render-tests/raster-color/categorical"
 ];
 
 export default {todo, skip};

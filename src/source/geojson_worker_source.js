@@ -3,7 +3,6 @@
 import {getJSON} from '../util/ajax.js';
 
 import {getPerformanceMeasurement} from '../util/performance.js';
-import rewind from '@mapbox/geojson-rewind';
 import GeoJSONWrapper from './geojson_wrapper.js';
 import vtpbf from 'vt-pbf';
 import Supercluster from 'supercluster';
@@ -21,7 +20,7 @@ import type {
 import type Actor from '../util/actor.js';
 import type StyleLayerIndex from '../style/style_layer_index.js';
 
-import type {LoadVectorDataCallback} from './vector_tile_worker_source.js';
+import type {LoadVectorDataCallback} from './load_vector_tile.js';
 import type {RequestParameters, ResponseCallback} from '../util/ajax.js';
 import type {Callback} from '../types/callback.js';
 import type {GeoJSONFeature} from '@mapbox/geojson-types';
@@ -135,8 +134,6 @@ class GeoJSONWorkerSource extends VectorTileWorkerSource {
             } else if (typeof data !== 'object') {
                 return callback(new Error(`Input data given to '${params.source}' is not a valid GeoJSON object.`));
             } else {
-                rewind(data, true);
-
                 try {
                     if (params.filter) {
                         const compiled = createExpression(params.filter, {type: 'boolean', 'property-type': 'data-driven', overridable: false, transition: false});

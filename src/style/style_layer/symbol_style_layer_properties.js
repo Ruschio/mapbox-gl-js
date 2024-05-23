@@ -1,4 +1,4 @@
-// This file is generated. Edit build/generate-style-code.js, then run `yarn run codegen`.
+// This file is generated. Edit build/generate-style-code.js, then run `npm run codegen`.
 // @flow
 /* eslint-disable */
 
@@ -131,6 +131,10 @@ export type PaintProps = {|
     "text-halo-blur": DataDrivenProperty<number>,
     "text-translate": DataConstantProperty<[number, number]>,
     "text-translate-anchor": DataConstantProperty<"map" | "viewport">,
+    "icon-color-saturation": DataConstantProperty<number>,
+    "icon-color-contrast": DataConstantProperty<number>,
+    "icon-color-brightness-min": DataConstantProperty<number>,
+    "icon-color-brightness-max": DataConstantProperty<number>,
 |};
 
 const paint: Properties<PaintProps> = new Properties({
@@ -151,6 +155,10 @@ const paint: Properties<PaintProps> = new Properties({
     "text-halo-blur": new DataDrivenProperty(styleSpec["paint_symbol"]["text-halo-blur"]),
     "text-translate": new DataConstantProperty(styleSpec["paint_symbol"]["text-translate"]),
     "text-translate-anchor": new DataConstantProperty(styleSpec["paint_symbol"]["text-translate-anchor"]),
+    "icon-color-saturation": new DataConstantProperty(styleSpec["paint_symbol"]["icon-color-saturation"]),
+    "icon-color-contrast": new DataConstantProperty(styleSpec["paint_symbol"]["icon-color-contrast"]),
+    "icon-color-brightness-min": new DataConstantProperty(styleSpec["paint_symbol"]["icon-color-brightness-min"]),
+    "icon-color-brightness-max": new DataConstantProperty(styleSpec["paint_symbol"]["icon-color-brightness-max"]),
 });
 
 // Note: without adding the explicit type annotation, Flow infers weaker types

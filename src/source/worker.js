@@ -5,6 +5,7 @@ import Actor from '../util/actor.js';
 import StyleLayerIndex from '../style/style_layer_index.js';
 import VectorTileWorkerSource from './vector_tile_worker_source.js';
 import RasterDEMTileWorkerSource from './raster_dem_tile_worker_source.js';
+import RasterArrayTileWorkerSource from './raster_array_tile_worker_source.js';
 import GeoJSONWorkerSource from './geojson_worker_source.js';
 import Tiled3dModelWorkerSource from '../../3d-style/source/tiled_3d_model_worker_source.js';
 import assert from 'assert';
@@ -14,19 +15,23 @@ import {PerformanceUtils} from '../util/performance.js';
 import {Event} from '../util/evented.js';
 import {getProjection} from '../geo/projection/index.js';
 
+import type {Class} from '../types/class.js';
+
 import type {
     WorkerSource,
     WorkerTileParameters,
     WorkerDEMTileParameters,
     WorkerTileCallback,
     WorkerDEMTileCallback,
-    TileParameters
+    TileParameters,
+    WorkerRasterArrayTileParameters,
+    WorkerRasterArrayTileCallback
 } from '../source/worker_source.js';
 
 import type {WorkerGlobalScopeInterface} from '../util/web_worker.js';
 import type {Callback} from '../types/callback.js';
 import type {LayerSpecification, ProjectionSpecification} from '../style-spec/types.js';
-import type {Expression} from '../style-spec/expression/expression.js';
+import type {ConfigOptions} from '../style/properties.js';
 import type {PluginState} from './rtl_text_plugin.js';
 import type Projection from '../geo/projection/projection.js';
 
@@ -41,6 +46,7 @@ export default class Worker {
     workerSourceTypes: {[_: string]: Class<WorkerSource> };
     workerSources: {[mapId: string]: {[scope: string]: {[sourceType: string]: {[sourceId: string]: WorkerSource}}}};
     demWorkerSources: {[mapId: string]: {[scope: string]: {[sourceId: string]: RasterDEMTileWorkerSource }}};
+    rasterArrayWorkerSource: ?RasterArrayTileWorkerSource;
     projections: {[_: string]: Projection };
     defaultProjection: Projection;
     isSpriteLoaded: {[mapId: string]: {[scope: string]: boolean}};
@@ -93,6 +99,7 @@ export default class Worker {
         delete this.availableImages[mapId];
         delete this.workerSources[mapId];
         delete this.demWorkerSources[mapId];
+        delete this.rasterArrayWorkerSource;
         callback();
     }
 
@@ -157,12 +164,12 @@ export default class Worker {
         callback();
     }
 
-    setLayers(mapId: string, params: {layers: Array<LayerSpecification>, scope: string, options: Map<string, Expression>}, callback: WorkerTileCallback) {
+    setLayers(mapId: string, params: {layers: Array<LayerSpecification>, scope: string, options: ConfigOptions}, callback: WorkerTileCallback) {
         this.getLayerIndex(mapId, params.scope).replace(params.layers, params.options);
         callback();
     }
 
-    updateLayers(mapId: string, params: {layers: Array<LayerSpecification>, scope: string, removedIds: Array<string>, options: Map<string, Expression>}, callback: WorkerTileCallback) {
+    updateLayers(mapId: string, params: {layers: Array<LayerSpecification>, scope: string, removedIds: Array<string>, options: ConfigOptions}, callback: WorkerTileCallback) {
         this.getLayerIndex(mapId, params.scope).update(params.layers, params.removedIds, params.options);
         callback();
     }
@@ -175,6 +182,10 @@ export default class Worker {
 
     loadDEMTile(mapId: string, params: WorkerDEMTileParameters, callback: WorkerDEMTileCallback) {
         this.getDEMWorkerSource(mapId, params.source, params.scope).loadTile(params, callback);
+    }
+
+    decodeRasterArray(mapId: string, params: WorkerRasterArrayTileParameters, callback: WorkerRasterArrayTileCallback) {
+        this.getRasterArrayWorkerSource().decodeRasterArray(params, callback);
     }
 
     reloadTile(mapId: string, params: WorkerTileParameters & {type: string}, callback: WorkerTileCallback) {
@@ -327,6 +338,14 @@ export default class Worker {
         return this.demWorkerSources[mapId][scope][source];
     }
 
+    getRasterArrayWorkerSource(): RasterArrayTileWorkerSource {
+        if (!this.rasterArrayWorkerSource) {
+            this.rasterArrayWorkerSource = new RasterArrayTileWorkerSource();
+        }
+
+        return this.rasterArrayWorkerSource;
+    }
+
     enforceCacheSizeLimit(mapId: string, limit: number) {
         enforceCacheSizeLimit(limit);
     }
@@ -336,7 +355,7 @@ export default class Worker {
     }
 }
 
-/* global self, WorkerGlobalScope */
+/* global WorkerGlobalScope */
 if (typeof WorkerGlobalScope !== 'undefined' &&
     typeof self !== 'undefined' &&
     self instanceof WorkerGlobalScope) {

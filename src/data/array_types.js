@@ -1,10 +1,11 @@
-// This file is generated. Edit build/generate-struct-arrays.js, then run `yarn run codegen`.
+// This file is generated. Edit build/generate-struct-arrays.js, then run `npm run codegen`.
 /* eslint-disable camelcase */
 // @flow
 
 import assert from 'assert';
 import {Struct, StructArray} from '../util/struct_array.js';
 import {register} from '../util/web_worker_transfer.js';
+import type {IStructArrayLayout} from '../util/struct_array.js';
 
 /**
  * Implementation of the StructArray layout:
@@ -12,7 +13,7 @@ import {register} from '../util/web_worker_transfer.js';
  *
  * @private
  */
-class StructArrayLayout2i4 extends StructArray {
+class StructArrayLayout2i4 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
 
@@ -44,7 +45,7 @@ register(StructArrayLayout2i4, 'StructArrayLayout2i4');
  *
  * @private
  */
-class StructArrayLayout3i6 extends StructArray {
+class StructArrayLayout3i6 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
 
@@ -77,7 +78,7 @@ register(StructArrayLayout3i6, 'StructArrayLayout3i6');
  *
  * @private
  */
-class StructArrayLayout4i8 extends StructArray {
+class StructArrayLayout4i8 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
 
@@ -111,7 +112,7 @@ register(StructArrayLayout4i8, 'StructArrayLayout4i8');
  *
  * @private
  */
-class StructArrayLayout5i10 extends StructArray {
+class StructArrayLayout5i10 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
 
@@ -148,7 +149,7 @@ register(StructArrayLayout5i10, 'StructArrayLayout5i10');
  *
  * @private
  */
-class StructArrayLayout2i4ub1f12 extends StructArray {
+class StructArrayLayout2i4ub1f12 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
     float32: Float32Array;
@@ -189,7 +190,7 @@ register(StructArrayLayout2i4ub1f12, 'StructArrayLayout2i4ub1f12');
  *
  * @private
  */
-class StructArrayLayout4f16 extends StructArray {
+class StructArrayLayout4f16 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
 
@@ -219,12 +220,44 @@ register(StructArrayLayout4f16, 'StructArrayLayout4f16');
 
 /**
  * Implementation of the StructArray layout:
+ * [0]: Float32[2]
+ *
+ * @private
+ */
+class StructArrayLayout2f8 extends StructArray implements IStructArrayLayout {
+    uint8: Uint8Array;
+    float32: Float32Array;
+
+    _refreshViews() {
+        this.uint8 = new Uint8Array(this.arrayBuffer);
+        this.float32 = new Float32Array(this.arrayBuffer);
+    }
+
+    emplaceBack(v0: number, v1: number): number {
+        const i = this.length;
+        this.resize(i + 1);
+        return this.emplace(i, v0, v1);
+    }
+
+    emplace(i: number, v0: number, v1: number): number {
+        const o4 = i * 2;
+        this.float32[o4 + 0] = v0;
+        this.float32[o4 + 1] = v1;
+        return i;
+    }
+}
+
+StructArrayLayout2f8.prototype.bytesPerElement = 8;
+register(StructArrayLayout2f8, 'StructArrayLayout2f8');
+
+/**
+ * Implementation of the StructArray layout:
  * [0]: Uint16[4]
  * [8]: Float32[1]
  *
  * @private
  */
-class StructArrayLayout4ui1f12 extends StructArray {
+class StructArrayLayout4ui1f12 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint16: Uint16Array;
     float32: Float32Array;
@@ -262,7 +295,7 @@ register(StructArrayLayout4ui1f12, 'StructArrayLayout4ui1f12');
  *
  * @private
  */
-class StructArrayLayout4ui8 extends StructArray {
+class StructArrayLayout4ui8 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint16: Uint16Array;
 
@@ -296,7 +329,7 @@ register(StructArrayLayout4ui8, 'StructArrayLayout4ui8');
  *
  * @private
  */
-class StructArrayLayout6i12 extends StructArray {
+class StructArrayLayout6i12 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
 
@@ -334,7 +367,7 @@ register(StructArrayLayout6i12, 'StructArrayLayout6i12');
  *
  * @private
  */
-class StructArrayLayout4i4ui4i24 extends StructArray {
+class StructArrayLayout4i4ui4i24 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
     uint16: Uint16Array;
@@ -379,7 +412,7 @@ register(StructArrayLayout4i4ui4i24, 'StructArrayLayout4i4ui4i24');
  *
  * @private
  */
-class StructArrayLayout3i3f20 extends StructArray {
+class StructArrayLayout3i3f20 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
     float32: Float32Array;
@@ -418,7 +451,7 @@ register(StructArrayLayout3i3f20, 'StructArrayLayout3i3f20');
  *
  * @private
  */
-class StructArrayLayout1ul4 extends StructArray {
+class StructArrayLayout1ul4 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint32: Uint32Array;
 
@@ -449,7 +482,7 @@ register(StructArrayLayout1ul4, 'StructArrayLayout1ul4');
  *
  * @private
  */
-class StructArrayLayout2ui4 extends StructArray {
+class StructArrayLayout2ui4 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint16: Uint16Array;
 
@@ -485,7 +518,7 @@ register(StructArrayLayout2ui4, 'StructArrayLayout2ui4');
  *
  * @private
  */
-class StructArrayLayout5i4f1i1ul2ui40 extends StructArray {
+class StructArrayLayout5i4f1i1ul2ui40 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
     float32: Float32Array;
@@ -537,7 +570,7 @@ register(StructArrayLayout5i4f1i1ul2ui40, 'StructArrayLayout5i4f1i1ul2ui40');
  *
  * @private
  */
-class StructArrayLayout3i2i2i16 extends StructArray {
+class StructArrayLayout3i2i2i16 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
 
@@ -576,7 +609,7 @@ register(StructArrayLayout3i2i2i16, 'StructArrayLayout3i2i2i16');
  *
  * @private
  */
-class StructArrayLayout2f1f2i16 extends StructArray {
+class StructArrayLayout2f1f2i16 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
     int16: Int16Array;
@@ -615,7 +648,7 @@ register(StructArrayLayout2f1f2i16, 'StructArrayLayout2f1f2i16');
  *
  * @private
  */
-class StructArrayLayout2ub2f12 extends StructArray {
+class StructArrayLayout2ub2f12 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
 
@@ -646,44 +679,11 @@ register(StructArrayLayout2ub2f12, 'StructArrayLayout2ub2f12');
 
 /**
  * Implementation of the StructArray layout:
- * [0]: Float32[3]
- *
- * @private
- */
-class StructArrayLayout3f12 extends StructArray {
-    uint8: Uint8Array;
-    float32: Float32Array;
-
-    _refreshViews() {
-        this.uint8 = new Uint8Array(this.arrayBuffer);
-        this.float32 = new Float32Array(this.arrayBuffer);
-    }
-
-    emplaceBack(v0: number, v1: number, v2: number): number {
-        const i = this.length;
-        this.resize(i + 1);
-        return this.emplace(i, v0, v1, v2);
-    }
-
-    emplace(i: number, v0: number, v1: number, v2: number): number {
-        const o4 = i * 3;
-        this.float32[o4 + 0] = v0;
-        this.float32[o4 + 1] = v1;
-        this.float32[o4 + 2] = v2;
-        return i;
-    }
-}
-
-StructArrayLayout3f12.prototype.bytesPerElement = 12;
-register(StructArrayLayout3f12, 'StructArrayLayout3f12');
-
-/**
- * Implementation of the StructArray layout:
  * [0]: Uint16[3]
  *
  * @private
  */
-class StructArrayLayout3ui6 extends StructArray {
+class StructArrayLayout3ui6 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint16: Uint16Array;
 
@@ -725,7 +725,7 @@ register(StructArrayLayout3ui6, 'StructArrayLayout3ui6');
  *
  * @private
  */
-class StructArrayLayout3i2f2ui3ul3ui2f3ub1ul1i1ub60 extends StructArray {
+class StructArrayLayout3i2f2ui3ul3ui2f3ub1ul1i1ub60 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     int16: Int16Array;
     float32: Float32Array;
@@ -789,7 +789,7 @@ register(StructArrayLayout3i2f2ui3ul3ui2f3ub1ul1i1ub60, 'StructArrayLayout3i2f2u
  *
  * @private
  */
-class StructArrayLayout2f9i15ui1ul4f1ub80 extends StructArray {
+class StructArrayLayout2f9i15ui1ul4f1ub80 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
     int16: Int16Array;
@@ -859,7 +859,7 @@ register(StructArrayLayout2f9i15ui1ul4f1ub80, 'StructArrayLayout2f9i15ui1ul4f1ub
  *
  * @private
  */
-class StructArrayLayout1f4 extends StructArray {
+class StructArrayLayout1f4 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
 
@@ -890,7 +890,7 @@ register(StructArrayLayout1f4, 'StructArrayLayout1f4');
  *
  * @private
  */
-class StructArrayLayout5f20 extends StructArray {
+class StructArrayLayout5f20 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
 
@@ -925,7 +925,7 @@ register(StructArrayLayout5f20, 'StructArrayLayout5f20');
  *
  * @private
  */
-class StructArrayLayout7f28 extends StructArray {
+class StructArrayLayout7f28 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
 
@@ -963,7 +963,7 @@ register(StructArrayLayout7f28, 'StructArrayLayout7f28');
  *
  * @private
  */
-class StructArrayLayout1ul3ui12 extends StructArray {
+class StructArrayLayout1ul3ui12 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint32: Uint32Array;
     uint16: Uint16Array;
@@ -1000,7 +1000,7 @@ register(StructArrayLayout1ul3ui12, 'StructArrayLayout1ul3ui12');
  *
  * @private
  */
-class StructArrayLayout1ui2 extends StructArray {
+class StructArrayLayout1ui2 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint16: Uint16Array;
 
@@ -1027,11 +1027,11 @@ register(StructArrayLayout1ui2, 'StructArrayLayout1ui2');
 
 /**
  * Implementation of the StructArray layout:
- * [0]: Float32[2]
+ * [0]: Float32[3]
  *
  * @private
  */
-class StructArrayLayout2f8 extends StructArray {
+class StructArrayLayout3f12 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
 
@@ -1040,22 +1040,23 @@ class StructArrayLayout2f8 extends StructArray {
         this.float32 = new Float32Array(this.arrayBuffer);
     }
 
-    emplaceBack(v0: number, v1: number): number {
+    emplaceBack(v0: number, v1: number, v2: number): number {
         const i = this.length;
         this.resize(i + 1);
-        return this.emplace(i, v0, v1);
+        return this.emplace(i, v0, v1, v2);
     }
 
-    emplace(i: number, v0: number, v1: number): number {
-        const o4 = i * 2;
+    emplace(i: number, v0: number, v1: number, v2: number): number {
+        const o4 = i * 3;
         this.float32[o4 + 0] = v0;
         this.float32[o4 + 1] = v1;
+        this.float32[o4 + 2] = v2;
         return i;
     }
 }
 
-StructArrayLayout2f8.prototype.bytesPerElement = 8;
-register(StructArrayLayout2f8, 'StructArrayLayout2f8');
+StructArrayLayout3f12.prototype.bytesPerElement = 12;
+register(StructArrayLayout3f12, 'StructArrayLayout3f12');
 
 /**
  * Implementation of the StructArray layout:
@@ -1063,7 +1064,7 @@ register(StructArrayLayout2f8, 'StructArrayLayout2f8');
  *
  * @private
  */
-class StructArrayLayout16f64 extends StructArray {
+class StructArrayLayout16f64 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     float32: Float32Array;
 
@@ -1110,7 +1111,7 @@ register(StructArrayLayout16f64, 'StructArrayLayout16f64');
  *
  * @private
  */
-class StructArrayLayout4ui3f20 extends StructArray {
+class StructArrayLayout4ui3f20 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
     uint16: Uint16Array;
     float32: Float32Array;
@@ -1146,11 +1147,42 @@ register(StructArrayLayout4ui3f20, 'StructArrayLayout4ui3f20');
 
 /**
  * Implementation of the StructArray layout:
+ * [0]: Int16[1]
+ *
+ * @private
+ */
+class StructArrayLayout1i2 extends StructArray implements IStructArrayLayout {
+    uint8: Uint8Array;
+    int16: Int16Array;
+
+    _refreshViews() {
+        this.uint8 = new Uint8Array(this.arrayBuffer);
+        this.int16 = new Int16Array(this.arrayBuffer);
+    }
+
+    emplaceBack(v0: number): number {
+        const i = this.length;
+        this.resize(i + 1);
+        return this.emplace(i, v0);
+    }
+
+    emplace(i: number, v0: number): number {
+        const o2 = i * 1;
+        this.int16[o2 + 0] = v0;
+        return i;
+    }
+}
+
+StructArrayLayout1i2.prototype.bytesPerElement = 2;
+register(StructArrayLayout1i2, 'StructArrayLayout1i2');
+
+/**
+ * Implementation of the StructArray layout:
  * [0]: Uint8[1]
  *
  * @private
  */
-class StructArrayLayout1ub1 extends StructArray {
+class StructArrayLayout1ub1 extends StructArray implements IStructArrayLayout {
     uint8: Uint8Array;
 
     _refreshViews() {
@@ -1393,6 +1425,7 @@ export {
     StructArrayLayout5i10,
     StructArrayLayout2i4ub1f12,
     StructArrayLayout4f16,
+    StructArrayLayout2f8,
     StructArrayLayout4ui1f12,
     StructArrayLayout4ui8,
     StructArrayLayout6i12,
@@ -1404,7 +1437,6 @@ export {
     StructArrayLayout3i2i2i16,
     StructArrayLayout2f1f2i16,
     StructArrayLayout2ub2f12,
-    StructArrayLayout3f12,
     StructArrayLayout3ui6,
     StructArrayLayout3i2f2ui3ul3ui2f3ub1ul1i1ub60,
     StructArrayLayout2f9i15ui1ul4f1ub80,
@@ -1413,9 +1445,10 @@ export {
     StructArrayLayout7f28,
     StructArrayLayout1ul3ui12,
     StructArrayLayout1ui2,
-    StructArrayLayout2f8,
+    StructArrayLayout3f12,
     StructArrayLayout16f64,
     StructArrayLayout4ui3f20,
+    StructArrayLayout1i2,
     StructArrayLayout1ub1,
     StructArrayLayout2i4 as PosArray,
     StructArrayLayout3i6 as PosGlobeExtArray,
@@ -1427,6 +1460,7 @@ export {
     StructArrayLayout2i4 as HeatmapLayoutArray,
     StructArrayLayout2i4ub1f12 as LineLayoutArray,
     StructArrayLayout4f16 as LineExtLayoutArray,
+    StructArrayLayout2f8 as LinePatternLayoutArray,
     StructArrayLayout4ui1f12 as PatternLayoutArray,
     StructArrayLayout4ui8 as DashLayoutArray,
     StructArrayLayout6i12 as FillExtrusionExtArray,
@@ -1438,7 +1472,7 @@ export {
     StructArrayLayout3i2i2i16 as CollisionBoxLayoutArray,
     StructArrayLayout2f1f2i16 as CollisionCircleLayoutArray,
     StructArrayLayout2ub2f12 as CollisionVertexArray,
-    StructArrayLayout3f12 as CollisionVertexExtArray,
+    StructArrayLayout4f16 as CollisionVertexExtArray,
     StructArrayLayout3ui6 as QuadTriangleArray,
     StructArrayLayout1f4 as ZOffsetVertexArray,
     StructArrayLayout5f20 as GlobeVertexArray,
@@ -1456,6 +1490,7 @@ export {
     StructArrayLayout3f12 as NormalLayoutArray,
     StructArrayLayout16f64 as InstanceVertexArray,
     StructArrayLayout4ui3f20 as FeatureVertexArray,
+    StructArrayLayout1i2 as ParticleIndexLayoutArray,
     StructArrayLayout1ub1 as FillExtrusionHiddenByLandmarkArray,
     StructArrayLayout6i12 as CircleGlobeExtArray
 };

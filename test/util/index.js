@@ -1,5 +1,4 @@
-import window from '../../src/util/window.js';
-import Map from '../../src/ui/map.js';
+import {Map} from '../../src/ui/map.js';
 import {extend} from '../../src/util/util.js';
 
 export function createMap(t, options, callback) {
@@ -8,6 +7,7 @@ export function createMap(t, options, callback) {
         container,
         interactive: false,
         attributionControl: false,
+        performanceMetricsCollection: false,
         trackResize: true,
         testMode: true,
         style: {
@@ -27,6 +27,8 @@ export function createMap(t, options, callback) {
     if (callback) map.on('load', () => {
         callback(null, map);
     });
+
+    map._authenticate = () => {};
 
     return map;
 }

@@ -13,14 +13,15 @@ import {makeFQID} from '../util/fqid.js';
 
 import type {Source} from './source.js';
 import type {OverscaledTileID} from './tile_id.js';
-import type Map from '../ui/map.js';
+import type {Map} from '../ui/map.js';
 import type Dispatcher from '../util/dispatcher.js';
 import type Tile from './tile.js';
 import type {Callback} from '../types/callback.js';
 import type {Cancelable} from '../types/cancelable.js';
 import type {
     RasterSourceSpecification,
-    RasterDEMSourceSpecification
+    RasterDEMSourceSpecification,
+    RasterArraySourceSpecification
 } from '../style-spec/types.js';
 import Texture from '../render/texture.js';
 
@@ -46,7 +47,7 @@ import Texture from '../render/texture.js';
  * @see [Example: Add a WMS source](https://docs.mapbox.com/mapbox-gl-js/example/wms/)
  */
 class RasterTileSource extends Evented implements Source {
-    type: 'raster' | 'raster-dem';
+    type: 'raster' | 'raster-dem' | 'raster-array';
     id: string;
     scope: string;
     minzoom: number;
@@ -63,10 +64,10 @@ class RasterTileSource extends Evented implements Source {
     tiles: Array<string>;
 
     _loaded: boolean;
-    _options: RasterSourceSpecification | RasterDEMSourceSpecification;
+    _options: RasterSourceSpecification | RasterDEMSourceSpecification | RasterArraySourceSpecification;
     _tileJSONRequest: ?Cancelable;
 
-    constructor(id: string, options: RasterSourceSpecification | RasterDEMSourceSpecification, dispatcher: Dispatcher, eventedParent: Evented) {
+    constructor(id: string, options: RasterSourceSpecification | RasterDEMSourceSpecification | RasterArraySourceSpecification, dispatcher: Dispatcher, eventedParent: Evented) {
         super();
         this.id = id;
         this.dispatcher = dispatcher;
@@ -98,7 +99,7 @@ class RasterTileSource extends Evented implements Source {
 
                 postTurnstileEvent(tileJSON.tiles);
 
-                // `content` is included here to prevent a race condition where `Style#_updateSources` is called
+                // `content` is included here to prevent a race condition where `Style#updateSources` is called
                 // before the TileJSON arrives. this makes sure the tiles needed are loaded once TileJSON arrives
                 // ref: https://github.com/mapbox/mapbox-gl-js/pull/4347#discussion_r104418088
                 this.fire(new Event('data', {dataType: 'source', sourceDataType: 'metadata'}));

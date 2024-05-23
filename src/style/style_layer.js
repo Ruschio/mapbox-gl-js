@@ -2,13 +2,6 @@
 
 import {endsWith, filterObject} from '../util/util.js';
 
-import styleSpec from '../style-spec/reference/latest.js';
-import {
-    validateStyle,
-    validateLayoutProperty,
-    validatePaintProperty,
-    emitValidationErrors
-} from './validate_style.js';
 import {Evented} from '../util/evented.js';
 import {Layout, Transitionable, Transitioning, Properties, PossiblyEvaluated, PossiblyEvaluatedPropertyValue} from './properties.js';
 import {supportsPropertyExpression} from '../style-spec/util/properties.js';
@@ -16,11 +9,10 @@ import featureFilter from '../style-spec/feature_filter/index.js';
 import {makeFQID} from '../util/fqid.js';
 
 import type {FeatureState} from '../style-spec/expression/index.js';
-import type {Expression} from '../style-spec/expression/expression.js';
 import type {Bucket} from '../data/bucket.js';
 import type Point from '@mapbox/point-geometry';
 import type {FeatureFilter, FilterExpression} from '../style-spec/feature_filter/index.js';
-import type {TransitionParameters, PropertyValue} from './properties.js';
+import type {TransitionParameters, PropertyValue, ConfigOptions} from './properties.js';
 import type EvaluationParameters from './evaluation_parameters.js';
 import type Transform from '../geo/transform.js';
 import type {
@@ -30,15 +22,24 @@ import type {
     PropertyValueSpecification
 } from '../style-spec/types.js';
 import type {CustomLayerInterface} from './style_layer/custom_style_layer.js';
-import type MapboxMap from '../ui/map.js';
-import type {StyleSetterOptions} from './style.js';
+import type {Map as MapboxMap} from '../ui/map.js';
 import type {TilespaceQueryGeometry} from './query_geometry.js';
 import type {DEMSampler} from '../terrain/elevation.js';
 import type {IVectorTileFeature} from '@mapbox/vector-tile';
 import type {CreateProgramParams} from "../render/painter.js";
 import type SourceCache from '../source/source_cache.js';
+import type Painter from '../render/painter.js';
+import type {QueryFeature} from '../util/vectortile_to_geojson.js';
 
 const TRANSITION_SUFFIX = '-transition';
+
+type LayerRenderingStats = {
+    numRenderedVerticesInTransparentPass: number;
+    numRenderedVerticesInShadowPass: number;
+};
+
+// Symbols are draped only on native and for certain cases only
+const drapedLayers = new Set(['fill', 'line', 'background', 'hillshade', 'raster']);
 
 class StyleLayer extends Evented {
     id: string;
@@ -65,28 +66,18 @@ class StyleLayer extends Evented {
     _featureFilter: FeatureFilter;
     _filterCompiled: boolean;
 
-    options: ?Map<string, Expression>;
+    options: ?ConfigOptions;
+    _stats: ?LayerRenderingStats;
 
-    +queryRadius: (bucket: Bucket) => number;
-    +queryIntersectsFeature: (queryGeometry: TilespaceQueryGeometry,
-                              feature: IVectorTileFeature,
-                              featureState: FeatureState,
-                              geometry: Array<Array<Point>>,
-                              zoom: number,
-                              transform: Transform,
-                              pixelPosMatrix: Float32Array,
-                              elevationHelper: ?DEMSampler,
-                              layoutVertexArrayOffset: number) => boolean | number;
-
-    +onAdd: ?(map: MapboxMap) => void;
-    +onRemove: ?(map: MapboxMap) => void;
-    +isLayerDraped: ?(sourceCache: ?SourceCache) => boolean;
-
-    constructor(layer: LayerSpecification | CustomLayerInterface, properties: $ReadOnly<{layout?: Properties<*>, paint?: Properties<*>}>, options?: ?Map<string, Expression>) {
+    constructor(layer: LayerSpecification | CustomLayerInterface, properties: $ReadOnly<{layout?: Properties<*>, paint?: Properties<*>}>, scope: string, options?: ?ConfigOptions) {
         super();
 
         this.id = layer.id;
+        this.fqid = makeFQID(this.id, scope);
         this.type = layer.type;
+        this.scope = scope;
+        this.options = options;
+
         this._featureFilter = {filter: () => true, needGeometry: false, needFeature: false};
         this._filterCompiled = false;
         this.isConfigDependent = false;
@@ -105,23 +96,21 @@ class StyleLayer extends Evented {
             this.filter = layer.filter;
         }
 
-        this.options = options;
-
         if (layer.slot) this.slot = layer.slot;
 
         if (properties.layout) {
-            this._unevaluatedLayout = new Layout(properties.layout, options);
+            this._unevaluatedLayout = new Layout(properties.layout, this.scope, options);
             this.isConfigDependent = this.isConfigDependent || this._unevaluatedLayout.isConfigDependent;
         }
 
         if (properties.paint) {
-            this._transitionablePaint = new Transitionable(properties.paint, options);
+            this._transitionablePaint = new Transitionable(properties.paint, this.scope, options);
 
             for (const property in layer.paint) {
-                this.setPaintProperty(property, layer.paint[property], {validate: false});
+                this.setPaintProperty(property, layer.paint[property]);
             }
             for (const property in layer.layout) {
-                this.setLayoutProperty(property, layer.layout[property], {validate: false});
+                this.setLayoutProperty(property, layer.layout[property]);
             }
             this.isConfigDependent = this.isConfigDependent || this._transitionablePaint.isConfigDependent;
 
@@ -131,14 +120,14 @@ class StyleLayer extends Evented {
         }
     }
 
-    /**
-     * Sets the scope of the style layer to a particular Style.
-     *
-     * @private
-     */
-    setScope(scope: string) {
-        this.scope = scope;
-        this.fqid = makeFQID(this.id, scope);
+    // No-op in the StyleLayer class, must be implemented by each concrete StyleLayer
+    onAdd(_map: MapboxMap): void {}
+
+    // No-op in the StyleLayer class, must be implemented by each concrete StyleLayer
+    onRemove(_map: MapboxMap): void {}
+
+    isDraped(_sourceCache?: SourceCache | void): boolean {
+        return drapedLayers.has(this.type);
     }
 
     getLayoutProperty(name: string): PropertyValueSpecification<mixed> {
@@ -149,14 +138,7 @@ class StyleLayer extends Evented {
         return this._unevaluatedLayout.getValue(name);
     }
 
-    setLayoutProperty(name: string, value: any, options: StyleSetterOptions = {}) {
-        if (value !== null && value !== undefined) {
-            const key = `layers.${this.id}.layout.${name}`;
-            if (this._validate(validateLayoutProperty, key, name, value, options)) {
-                return;
-            }
-        }
-
+    setLayoutProperty(name: string, value: any) {
         if (this.type === 'custom' && name === 'visibility') {
             this.visibility = value;
             return;
@@ -186,14 +168,7 @@ class StyleLayer extends Evented {
         }
     }
 
-    setPaintProperty(name: string, value: mixed, options: StyleSetterOptions = {}): boolean {
-        if (value !== null && value !== undefined) {
-            const key = `layers.${this.id}.paint.${name}`;
-            if (this._validate(validatePaintProperty, key, name, value, options)) {
-                return false;
-            }
-        }
-
+    setPaintProperty(name: string, value: mixed): boolean {
         const paint = this._transitionablePaint;
         const specProps = paint._properties.properties;
 
@@ -291,21 +266,6 @@ class StyleLayer extends Evented {
         });
     }
 
-    _validate(validate: Function, key: string, name: string, value: mixed, options: StyleSetterOptions = {}): boolean {
-        if (options && options.validate === false) {
-            return false;
-        }
-        return emitValidationErrors(this, validate.call(validateStyle, {
-            key,
-            layerType: this.type,
-            objectKey: name,
-            value,
-            styleSpec,
-            // Workaround for https://github.com/mapbox/mapbox-gl-js/issues/2407
-            style: {glyphs: true, sprite: true}
-        }));
-    }
-
     is3D(): boolean {
         return false;
     }
@@ -335,6 +295,10 @@ class StyleLayer extends Evented {
     }
 
     cutoffRange(): number {
+        return 0.0;
+    }
+
+    tileCoverLift(): number {
         return 0.0;
     }
 
@@ -375,6 +339,44 @@ class StyleLayer extends Evented {
     dynamicFilterNeedsFeature(): boolean {
         return this._featureFilter.needFeature;
     }
+
+    getLayerRenderingStats(): ?LayerRenderingStats {
+        return this._stats;
+    }
+
+    resetLayerRenderingStats(painter: Painter) {
+        if (this._stats) {
+            if (painter.renderPass === 'shadow') {
+                this._stats.numRenderedVerticesInShadowPass = 0;
+            } else {
+                this._stats.numRenderedVerticesInTransparentPass = 0;
+            }
+        }
+    }
+
+    // $FlowFixMe[incompatible-return] - No-op in the StyleLayer class, must be implemented by each concrete StyleLayer
+    queryRadius(_bucket: Bucket): number {}
+
+    queryIntersectsFeature(
+        _queryGeometry: TilespaceQueryGeometry,
+        _feature: IVectorTileFeature,
+        _featureState: FeatureState,
+        _geometry: Array<Array<Point>>,
+        _zoom: number,
+        _transform: Transform,
+        _pixelPosMatrix: Float32Array,
+        _elevationHelper: ?DEMSampler,
+        _layoutVertexArrayOffset: number
+    // $FlowFixMe[incompatible-return] - No-op in the StyleLayer class, must be implemented by each concrete StyleLayer
+    ): boolean | number {}
+
+    queryIntersectsMatchingFeature(
+        _queryGeometry: TilespaceQueryGeometry,
+        _featureIndex: number,
+        _filter: FeatureFilter,
+        _transform: Transform
+    // $FlowFixMe[incompatible-return] - No-op in the StyleLayer class, must be implemented by each concrete StyleLayer
+    ): {queryFeature: ?QueryFeature, intersectionZ: number} {}
 }
 
 export default StyleLayer;

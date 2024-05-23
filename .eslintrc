@@ -60,7 +60,7 @@
     "no-eq-null": "off",
     "no-lonely-if": "off",
     "no-new": "off",
-    "no-unused-vars": ["error", {"argsIgnorePattern": "^_$"}],
+    "no-unused-vars": ["error", {"argsIgnorePattern": "^_"}],
     "no-warning-comments": "error",
     "no-mixed-operators": ["error", {"groups": [["&", "|", "^", "~", "<<", ">>", ">>>"], ["&&", "||"]]}],
     "object-curly-spacing": ["error", "never"],
@@ -129,7 +129,8 @@
         "jsdoc/require-property-description": "off",
         "jsdoc/require-property-name": "off",
         "jsdoc/require-property-type": "off",
-        "jsdoc/require-returns-type": "off",
+        "jsdoc/require-returns-type": "off"
+        
       }
     },
     {
@@ -143,7 +144,6 @@
         "src/ui/control/**",
         "src/ui/handler/**",
         "src/geo/lng_lat.js",
-        "src/geo/lng_lat_bounds.js",
         "src/geo/mercator_coordinate.js",
         "src/source/**",
       ],
@@ -161,7 +161,7 @@
             "matchingFileName": "src/fake_filename_for_jsdoc_examples",
             "rejectExampleCodeRegex": "<script>"
         }],
-        "jsdoc/check-line-alignment": ["error", "any", {"wrapIndent": "    "}],
+        "jsdoc/check-line-alignment": ["error"],
         "jsdoc/check-property-names": "error",
         "jsdoc/check-types": "error",
         "jsdoc/tag-lines": ["error", "any", {"startLines": 1}],
@@ -202,16 +202,20 @@
           {
             "selector": "ClassProperty[value]",
             "message": "ClassProperty values are not allowed."
+          },
+          {
+            "selector": "LogicalExpression[operator='??']",
+            "message": "Nullish coalescing is not allowed."
+          },
+          {
+            "selector": "ChainExpression",
+            "message": "Optional chaining is now allowed."
           }
         ]
       }
     }
   ],
-  "globals": {
-    "performance": true
-  },
   "env": {
-    "es6": true,
-    "browser": false
+    "es6": true
   }
 }

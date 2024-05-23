@@ -1,27 +1,31 @@
 // @flow
 
+import assert from 'assert';
+import Point from '@mapbox/point-geometry';
+import browser from '../../../src/util/browser.js';
 import {register} from '../../../src/util/web_worker_transfer.js';
-import type {Bucket} from '../../../src/data/bucket.js';
-import type {Node} from '../model.js';
 import {uploadNode, destroyNodeArrays, destroyBuffers, ModelTraits, HEIGHTMAP_DIM} from '../model.js';
-import type {EvaluationFeature} from '../../../src/data/evaluation_feature.js';
 import {OverscaledTileID} from '../../../src/source/tile_id.js';
-import type {CanonicalTileID} from '../../../src/source/tile_id.js';
-import ModelStyleLayer from '../../style/style_layer/model_style_layer.js';
-import type Context from '../../../src/gl/context.js';
-import type {ProjectionSpecification} from '../../../src/style-spec/types.js';
-import type Painter from '../../../src/render/painter.js';
-import type {Vec4} from 'gl-matrix';
-import {ReplacementSource} from '../../source/replacement_source.js';
 import {FeatureVertexArray} from '../../../src/data/array_types.js';
 import {number as interpolate} from '../../../src/style-spec/util/interpolate.js';
 import {clamp} from '../../../src/util/util.js';
 import {DEMSampler} from '../../../src/terrain/elevation.js';
-import type {Terrain} from '../../../src/terrain/terrain.js';
 import {ZoomConstantExpression} from '../../../src/style-spec/expression/index.js';
-import assert from 'assert';
-import Point from '@mapbox/point-geometry';
-import browser from '../../../src/util/browser.js';
+import {Aabb} from '../../../src/util/primitives.js';
+
+import type ModelStyleLayer from '../../style/style_layer/model_style_layer.js';
+import type {ReplacementSource} from '../../source/replacement_source.js';
+import type {Bucket} from '../../../src/data/bucket.js';
+import type {Node} from '../model.js';
+import type {EvaluationFeature} from '../../../src/data/evaluation_feature.js';
+import type {CanonicalTileID} from '../../../src/source/tile_id.js';
+import type Context from '../../../src/gl/context.js';
+import type {ProjectionSpecification} from '../../../src/style-spec/types.js';
+import type Painter from '../../../src/render/painter.js';
+import type {Vec4} from 'gl-matrix';
+import type {Terrain} from '../../../src/terrain/terrain.js';
+import FeatureIndex from '../../../src/data/feature_index.js';
+import type {GridIndex} from '../../../src/types/grid-index.js';
 
 const lookup = new Float32Array(512 * 512);
 const passLookup = new Uint8Array(512 * 512);
@@ -39,6 +43,20 @@ function getNodeHeight(node: Node): number {
         }
     }
     return height;
+}
+
+function addAABBsToGridIndex(node: Node, key: number, grid: GridIndex) {
+    if (node.meshes) {
+        for (const mesh of node.meshes) {
+            if (mesh.aabb.min[0] === Infinity) continue;
+            grid.insert(key, mesh.aabb.min[0], mesh.aabb.min[1], mesh.aabb.max[0], mesh.aabb.max[1]);
+        }
+    }
+    if (node.children) {
+        for (const child of node.children) {
+            addAABBsToGridIndex(child, key, grid);
+        }
+    }
 }
 
 export const PartIndices = {
@@ -60,6 +78,7 @@ export class Tiled3dModelFeature {
     hiddenByReplacement: boolean;
     hasTranslucentParts: boolean;
     node: Node;
+    aabb: Aabb;
     emissionHeightBasedParams: Array<[number, number, number, number, number]>;
     constructor(node: Node) {
         this.node = node;
@@ -77,10 +96,26 @@ export class Tiled3dModelFeature {
         // Needs to calculate geometry
         this.feature = {type: 'Point', id: node.id, geometry: [], properties: {'height' : getNodeHeight(node)}};
     }
+    getLocalBounds(): Aabb {
+        if (!this.node.meshes) {
+            return new Aabb([Infinity, Infinity, Infinity], [-Infinity, -Infinity, -Infinity]);
+        }
+        if (!this.aabb) {
+            let i = 0;
+            const aabb = new Aabb([Infinity, Infinity, Infinity], [-Infinity, -Infinity, -Infinity]);
+            for (const mesh of this.node.meshes) {
+                if (this.node.lightMeshIndex !== i) {
+                    aabb.encapsulate(mesh.aabb);
+                }
+                i++;
+            }
+            this.aabb = Aabb.applyTransform(aabb, this.node.matrix);
+        }
+        return this.aabb;
+    }
 }
 
 class Tiled3dModelBucket implements Bucket {
-    nodes: Array<Node>;
     id: OverscaledTileID;
     uploaded: boolean;
     modelTraits: number;
@@ -100,14 +135,16 @@ class Tiled3dModelBucket implements Bucket {
     brightness: ?number;
     needsUpload: boolean;
     /* $FlowIgnore[incompatible-type-arg] Doesn't need to know about all the implementations */
-    constructor(nodes: Array<Node>, id: OverscaledTileID, hasMbxMeshFeatures: boolean, brightness: ?number) {
-        this.nodes = nodes;
+    constructor(nodes: Array<Node>, id: OverscaledTileID, hasMbxMeshFeatures: boolean, hasMeshoptCompression: boolean, brightness: ?number, featureIndex: FeatureIndex) {
         this.id = id;
         this.modelTraits |= ModelTraits.CoordinateSpaceTile;
         this.uploaded = false;
         this.hasPattern = false;
         if (hasMbxMeshFeatures) {
             this.modelTraits |= ModelTraits.HasMapboxMeshFeatures;
+        }
+        if (hasMeshoptCompression) {
+            this.modelTraits |= ModelTraits.HasMeshoptCompression;
         }
         this.zoom = -1;
         this.terrainExaggeration = 1;
@@ -117,7 +154,15 @@ class Tiled3dModelBucket implements Bucket {
         this.brightness = brightness;
         this.dirty = true;
         this.needsUpload = false;
+
+        this.nodesInfo = [];
+        for (const node of nodes) {
+            this.nodesInfo.push(new Tiled3dModelFeature(node));
+            addAABBsToGridIndex(node, featureIndex.featureIndexArray.length, featureIndex.grid);
+            featureIndex.featureIndexArray.emplaceBack(this.nodesInfo.length - 1, 0 /*sourceLayerIndex*/, featureIndex.bucketLayerIDs.length - 1, 0);
+        }
     }
+
     update() {
         console.log("Update 3D model bucket");
     }
@@ -183,7 +228,7 @@ class Tiled3dModelBucket implements Bucket {
         const canonical = this.id.canonical;
         for (const nodeInfo of nodesInfo) {
             const evaluationFeature = nodeInfo.feature;
-            nodeInfo.evaluatedScale = (layer.paint.get('model-scale').evaluate(evaluationFeature, {}, canonical): any);
+            nodeInfo.evaluatedScale = layer.paint.get('model-scale').evaluate(evaluationFeature, {}, canonical);
         }
     }
 
@@ -220,9 +265,11 @@ class Tiled3dModelBucket implements Bucket {
                 delete evaluationFeature.properties['part'];
                 const doorLightChanged = previousDoorColor !== nodeInfo.evaluatedColor[PartIndices.door] ||
                                          previousDoorRMEA !== nodeInfo.evaluatedRMEA[PartIndices.door];
-                updateNodeFeatureVertices(nodeInfo, doorLightChanged);
+                updateNodeFeatureVertices(nodeInfo, doorLightChanged, this.modelTraits);
+            } else {
+                nodeInfo.evaluatedRMEA[0][2] = layer.paint.get('model-emissive-strength').evaluate(evaluationFeature, {}, canonical);
             }
-            nodeInfo.evaluatedScale = (layer.paint.get('model-scale').evaluate(evaluationFeature, {}, canonical): any);
+            nodeInfo.evaluatedScale = layer.paint.get('model-scale').evaluate(evaluationFeature, {}, canonical);
             if (!this.updatePbrBuffer(nodeInfo.node)) {
                 this.needsUpload = true;
             }
@@ -422,27 +469,10 @@ class Tiled3dModelBucket implements Bucket {
     }
 
     getNodesInfo(): Array<Tiled3dModelFeature> {
-        if (!this.nodesInfo) {
-            this.nodesInfo = [];
-            for (const node of this.nodes) {
-                this.nodesInfo.push(new Tiled3dModelFeature(node));
-            }
-            this.freeNodes();
-        }
         return this.nodesInfo;
     }
 
-    freeNodes() {
-        if (this.nodes) {
-            for (const node of this.nodes) {
-                destroyBuffers(node);
-            }
-            this.nodes.splice(0, this.nodes.length);
-        }
-    }
-
     destroy() {
-        this.freeNodes();
         const nodesInfo = this.getNodesInfo();
         for (const nodeInfo of nodesInfo) {
             destroyNodeArrays(nodeInfo.node);
@@ -451,7 +481,7 @@ class Tiled3dModelBucket implements Bucket {
     }
 
     isEmpty(): boolean {
-        return !this.nodes.length;
+        return !this.nodesInfo.length;
     }
 
     updateReplacement(coord: OverscaledTileID, source: ReplacementSource) {
@@ -559,9 +589,10 @@ function addPBRVertex(vertexArray: FeatureVertexArray, color: number, colorMix: 
     }
 }
 
-function updateNodeFeatureVertices(nodeInfo: Tiled3dModelFeature, doorLightChanged: boolean) {
+function updateNodeFeatureVertices(nodeInfo: Tiled3dModelFeature, doorLightChanged: boolean, modelTraits: number) {
     const node = nodeInfo.node;
     let i = 0;
+    const isV2Tile = modelTraits & ModelTraits.HasMeshoptCompression;
     for (const mesh of node.meshes) {
         if (node.lights && node.lightMeshIndex === i) continue;
         if (!mesh.featureData) continue;
@@ -570,13 +601,19 @@ function updateNodeFeatureVertices(nodeInfo: Tiled3dModelFeature, doorLightChang
         mesh.featureArray.reserve(mesh.featureData.length);
         let pendingDoorLightUpdate = doorLightChanged;
         for (const feature of mesh.featureData) {
-            let lightsFeatureArray;
-            const id = feature & 0xFFFF;
+            // V1 and V2 tiles have a different bit structure
+            // In V2, meshopt compression forces to use values less than 2^24 to not lose any information
+            // That's why colors are in the least significant bits and use the following LSB to encode
+            // part ids.
+            const featureColor = isV2Tile ? feature & 0xffff : (feature >> 16) & 0xffff;
+            const id = isV2Tile ? (feature >> 16) & 0xffff : feature & 0xffff;
             const partId = (id & 0xf) < 8 ? (id & 0xf) : 0;
-            const featureColor = (feature >> 16) & 0xFFFF;
+
             const rmea = nodeInfo.evaluatedRMEA[partId];
             const evaluatedColor = nodeInfo.evaluatedColor[partId];
             const emissionParams = nodeInfo.emissionHeightBasedParams[partId];
+
+            let lightsFeatureArray;
             if (pendingDoorLightUpdate && partId === PartIndices.door && node.lights) {
                 lightsFeatureArray = new FeatureVertexArray();
                 lightsFeatureArray.resize(node.lights.length * 10);

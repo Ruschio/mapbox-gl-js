@@ -1,9 +1,16 @@
 // @flow
 
-import type Actor from '../../src/util/actor.js';
 import {getArrayBuffer} from '../../src/util/ajax.js';
-import type StyleLayerIndex from '../../src/style/style_layer_index.js';
 import FeatureIndex from '../../src/data/feature_index.js';
+import {process3DTile} from './model_loader.js';
+import {tileToMeter} from '../../src/geo/mercator_coordinate.js';
+import Tiled3dModelBucket from '../data/bucket/tiled_3d_model_bucket.js';
+import {CanonicalTileID, OverscaledTileID} from '../../src/source/tile_id.js';
+import {load3DTile} from '../util/loaders.js';
+import EvaluationParameters from '../../src/style/evaluation_parameters.js';
+
+import type Actor from '../../src/util/actor.js';
+import type StyleLayerIndex from '../../src/style/style_layer_index.js';
 import type {
     WorkerSource,
     WorkerTileParameters,
@@ -11,14 +18,8 @@ import type {
     TileParameters,
     WorkerTileResult
 } from '../../src/source/worker_source.js';
-import {process3DTile} from './model_loader.js';
-import {tileToMeter} from '../../src/geo/mercator_coordinate.js';
-import Tiled3dModelBucket from '../data/bucket/tiled_3d_model_bucket.js';
 import type {Bucket} from '../../src/data/bucket.js';
-import {CanonicalTileID, OverscaledTileID} from '../../src/source/tile_id.js';
 import type Projection from '../../src/geo/projection/projection.js';
-import {load3DTile} from '../util/loaders.js';
-import EvaluationParameters from '../../src/style/evaluation_parameters.js';
 
 class Tiled3dWorkerTile {
     tileID: OverscaledTileID;
@@ -56,19 +57,23 @@ class Tiled3dWorkerTile {
         const layerFamilies = layerIndex.familiesBySource[params.source];
         const featureIndex = new FeatureIndex(tileID, params.promoteId);
         featureIndex.bucketLayerIDs = [];
+        featureIndex.is3DTile = true;
 
         return load3DTile(data)
             .then(gltf => {
                 if (!gltf) return callback(new Error('Could not parse tile'));
                 const nodes = process3DTile(gltf, 1.0 / tileToMeter(params.tileID.canonical));
-                const hasMapboxMeshFeatures = gltf.json.extensionsUsed && gltf.json.extensionsUsed.includes('MAPBOX_mesh_features');
+                const hasMapboxMeshFeatures = (gltf.json.extensionsUsed && gltf.json.extensionsUsed.includes('MAPBOX_mesh_features')) ||
+                                            (gltf.json.asset.extras && gltf.json.asset.extras['MAPBOX_mesh_features']);
+                const hasMeshoptCompression = gltf.json.extensionsUsed && gltf.json.extensionsUsed.includes('EXT_meshopt_compression');
+
                 const parameters = new EvaluationParameters(this.zoom, {brightness: this.brightness});
                 for (const sourceLayerId in layerFamilies) {
                     for (const family of layerFamilies[sourceLayerId]) {
                         const layer = family[0];
-                        const extensions = gltf.json.extensionsUsed;
+                        featureIndex.bucketLayerIDs.push(family.map((l) => l.id));
                         layer.recalculate(parameters, []);
-                        const bucket = new Tiled3dModelBucket(nodes, tileID, extensions && extensions.includes("MAPBOX_mesh_features"), this.brightness);
+                        const bucket = new Tiled3dModelBucket(nodes, tileID, hasMapboxMeshFeatures, hasMeshoptCompression, this.brightness, featureIndex);
                         // Upload to GPU without waiting for evaluation if we are in diffuse path
                         if (!hasMapboxMeshFeatures) bucket.needsUpload = true;
                         buckets[layer.fqid] = bucket;

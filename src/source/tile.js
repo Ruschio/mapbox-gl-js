@@ -27,6 +27,7 @@ import boundsAttributes from '../data/bounds_attributes.js';
 import posAttributes, {posAttributesGlobeExt} from '../data/pos_attributes.js';
 import EXTENT from '../style-spec/data/extent.js';
 import Point from '@mapbox/point-geometry';
+import RasterParticleState from '../render/raster_particle_state.js';
 import SegmentVector from '../data/segment.js';
 import {transitionTileAABBinECEF, globeNormalizeECEF, tileCoordToECEF, globeToMercatorTransition, interpolateVec3} from '../geo/projection/globe_util.js';
 import {vec3, mat4} from 'gl-matrix';
@@ -63,6 +64,7 @@ const CLOCK_SKEW_RETRY_TIMEOUT = 30000;
 export type TileState =
     | 'loading'   // Tile data is in the process of loading.
     | 'loaded'    // Tile data has been loaded. Tile can be rendered.
+    | 'empty'     // Tile data has been loaded but has no content for rendering.
     | 'reloading' // Tile data has been loaded and is being updated. Tile can be rendered.
     | 'unloaded'  // Tile data has been deleted.
     | 'errored'   // Tile data was not loaded because of an error.
@@ -136,6 +138,7 @@ class Tile {
     reloadCallback: any;
     resourceTiming: ?Array<PerformanceResourceTiming>;
     queryPadding: number;
+    rasterParticleState: ?RasterParticleState;
 
     symbolFadeHoldUntil: ?number;
     hasSymbolBuckets: boolean;
@@ -164,7 +167,7 @@ class Tile {
      * @param size
      * @private
      */
-    constructor(tileID: OverscaledTileID, size: number, tileZoom: number, painter: any, isRaster?: boolean) {
+    constructor(tileID: OverscaledTileID, size: number, tileZoom: number, painter: ?Painter, isRaster?: boolean) {
         this.tileID = tileID;
         this.uid = uniqueId();
         this.uses = 0;
@@ -393,18 +396,20 @@ class Tile {
         }
 
         const gl = context.gl;
-        if (this.imageAtlas && !this.imageAtlas.uploaded) {
-            this.imageAtlasTexture = new Texture(context, this.imageAtlas.image, gl.RGBA);
+        const atlas = this.imageAtlas;
+        if (atlas && !atlas.uploaded) {
+            const hasPattern = !!Object.keys(atlas.patternPositions).length;
+            this.imageAtlasTexture = new Texture(context, atlas.image, gl.RGBA, {useMipmap: hasPattern});
             ((this.imageAtlas: any): ImageAtlas).uploaded = true;
         }
 
         if (this.glyphAtlasImage) {
-            this.glyphAtlasTexture = new Texture(context, this.glyphAtlasImage, gl.ALPHA);
+            this.glyphAtlasTexture = new Texture(context, this.glyphAtlasImage, gl.R8);
             this.glyphAtlasImage = null;
         }
 
         if (this.lineAtlas && !this.lineAtlas.uploaded) {
-            this.lineAtlasTexture = new Texture(context, this.lineAtlas.image, gl.ALPHA);
+            this.lineAtlasTexture = new Texture(context, this.lineAtlas.image, gl.R8);
             ((this.lineAtlas: any): LineAtlas).uploaded = true;
         }
     }
@@ -454,7 +459,7 @@ class Tile {
             }
         });
 
-        if (!this.latestFeatureIndex || !this.latestFeatureIndex.rawTileData)
+        if (!this.latestFeatureIndex || !(this.latestFeatureIndex.rawTileData || this.latestFeatureIndex.is3DTile))
             return {};
 
         return this.latestFeatureIndex.query({
@@ -966,6 +971,11 @@ class Tile {
         if (this.demTexture) {
             this.demTexture.destroy();
             delete this.demTexture;
+        }
+
+        if (this.rasterParticleState) {
+            this.rasterParticleState.destroy();
+            delete this.rasterParticleState;
         }
 
         Debug.run(() => {

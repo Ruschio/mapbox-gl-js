@@ -8,20 +8,35 @@
 // #define scale 63.0
 #define scale 0.015873016
 
-attribute vec2 a_pos_normal;
-attribute vec4 a_data;
-attribute float a_linesofar;
+in vec2 a_pos_normal;
+in vec4 a_data;
+// Includes in order: a_uv_x, a_split_index, a_clip_start, a_clip_end
+// to reduce attribute count on older devices.
+// Only line-trim-offset will requires a_packed info.
+#ifdef RENDER_LINE_TRIM_OFFSET
+in highp vec4 a_packed;
+#endif
+in float a_linesofar;
+
+#ifdef LINE_JOIN_NONE
+in vec2 a_pattern_data; // [position_in_segment & offset_sign, segment_length];
+out vec2 v_pattern_data; // [position_in_segment, segment_length]
+#endif
 
 uniform mat4 u_matrix;
+uniform mediump float u_tile_units_to_pixels;
 uniform vec2 u_units_to_pixels;
 uniform mat2 u_pixels_to_tile_units;
 uniform lowp float u_device_pixel_ratio;
 
-varying vec2 v_normal;
-varying vec2 v_width2;
-varying float v_linesofar;
-varying float v_gamma_scale;
-varying float v_width;
+out vec2 v_normal;
+out vec2 v_width2;
+out float v_linesofar;
+out float v_gamma_scale;
+out float v_width;
+#ifdef RENDER_LINE_TRIM_OFFSET
+out highp vec4 v_uv;
+#endif
 
 #pragma mapbox: define lowp float blur
 #pragma mapbox: define lowp float opacity
@@ -44,9 +59,10 @@ void main() {
 
     // the distance over which the line edge fades out.
     // Retina devices need a smaller distance to avoid aliasing.
-    float ANTIALIASING = 1.0 / u_device_pixel_ratio / 2.0;
+    float ANTIALIASING = 0.5 / u_device_pixel_ratio;
 
-    vec2 a_extrude = a_data.xy - 128.0;
+    // Scale the extrusion vector down to 1<=length<=2 scale
+    vec2 extrude = (a_data.xy - 128.0) * scale;
     float a_direction = mod(a_data.z, 4.0) - 1.0;
 
     vec2 pos = floor(a_pos_normal * 0.5);
@@ -60,16 +76,13 @@ void main() {
 
     // these transformations used to be applied in the JS and native code bases.
     // moved them into the shader for clarity and simplicity.
-    gapwidth = gapwidth / 2.0;
-    float halfwidth = width / 2.0;
-    offset = -1.0 * offset;
+    gapwidth = gapwidth * 0.5;
 
     float inset = gapwidth + (gapwidth > 0.0 ? ANTIALIASING : 0.0);
-    float outset = gapwidth + halfwidth * (gapwidth > 0.0 ? 2.0 : 1.0) + (halfwidth == 0.0 ? 0.0 : ANTIALIASING);
+    float outset = gapwidth + width * (gapwidth > 0.0 ? 1.0 : 0.5) + (width == 0.0 ? 0.0 : ANTIALIASING);
 
-    // Scale the extrusion vector down to a normal and then up by the line width
-    // of this vertex.
-    mediump vec2 dist = outset * a_extrude * scale;
+    // Scale the extrusion vector up by the line width of this vertex
+    mediump vec2 dist = outset * extrude;
 
     // Calculate the offset when drawing a line that is to the side of the actual line.
     // We do this by creating a vector that points towards the extrude, but rotate
@@ -77,7 +90,7 @@ void main() {
     // extrude vector points in another direction.
     mediump float u = 0.5 * a_direction;
     mediump float t = 1.0 - abs(u);
-    mediump vec2 offset2 = offset * a_extrude * scale * normal.y * mat2(t, -u, u, t);
+    mediump vec2 offset2 = -offset * extrude * normal.y * mat2(t, -u, u, t);
 
     vec4 projected_extrude = u_matrix * vec4(dist * u_pixels_to_tile_units, 0.0, 0.0);
     gl_Position = u_matrix * vec4(pos + offset2 * u_pixels_to_tile_units, 0.0, 1.0) + projected_extrude;
@@ -90,9 +103,27 @@ void main() {
 #else
     v_gamma_scale = 1.0;
 #endif
+
+#ifdef RENDER_LINE_TRIM_OFFSET
+    float a_uv_x = a_packed[0];
+    highp float a_clip_start = a_packed[2];
+    highp float a_clip_end = a_packed[3];
+    v_uv = vec4(a_uv_x, 0.0, a_clip_start, a_clip_end);
+#endif
+
     v_linesofar = a_linesofar;
     v_width2 = vec2(outset, inset);
     v_width = floorwidth;
+
+#ifdef LINE_JOIN_NONE
+    // Needs to consider antialiasing width extension to get accurate pattern aspect ratio
+    v_width += ANTIALIASING;
+    // Offset caused by vertices extended forward or backward from line point
+    float offset_sign = (fract(a_pattern_data.x) - 0.5) * 4.0;
+    float line_progress_offset = offset_sign * v_width * 0.5 / u_tile_units_to_pixels;
+    v_linesofar += line_progress_offset;
+    v_pattern_data = vec2(a_pattern_data.x + line_progress_offset, a_pattern_data.y);
+#endif
 
 #ifdef FOG
     v_fog_pos = fog_position(pos);

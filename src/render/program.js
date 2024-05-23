@@ -31,11 +31,12 @@ import ColorMode from '../gl/color_mode.js';
 import type CullFaceMode from '../gl/cull_face_mode.js';
 import type {UniformBindings, UniformValues} from './uniform_binding.js';
 import type {BinderUniform} from '../data/program_configuration.js';
-import Painter from './painter.js';
+import type Painter from './painter.js';
 import type {Segment} from "../data/segment";
 import Color from '../style-spec/util/color.js';
 
 export type DrawMode =
+    | $PropertyType<WebGL2RenderingContext, 'POINTS'>
     | $PropertyType<WebGL2RenderingContext, 'LINES'>
     | $PropertyType<WebGL2RenderingContext, 'TRIANGLES'>
     | $PropertyType<WebGL2RenderingContext, 'LINE_STRIP'>;
@@ -48,17 +49,6 @@ type ShaderSource = {
     vertexIncludes: Array<string>,
     fragmentIncludes: Array<string>
 };
-
-function getTokenizedAttributes(array: Array<string>): Array<string> {
-    const result = [];
-
-    for (let i = 0; i < array.length; i++) {
-        if (array[i] === null) continue;
-        const token = array[i].split(' ');
-        result.push(token.pop());
-    }
-    return result;
-}
 
 const debugWireframe2DLayerProgramNames = [
     'fill', 'fillOutline', 'fillPattern',
@@ -114,9 +104,8 @@ class Program<Us: UniformBindings> {
         this.name = name;
         this.fixedDefines = [...fixedDefines];
 
-        const staticAttrInfo = getTokenizedAttributes(source.staticAttributes);
         const dynamicAttrInfo = configuration ? configuration.getBinderAttributes() : [];
-        const allAttrInfo = staticAttrInfo.concat(dynamicAttrInfo);
+        const allAttrInfo = (source.staticAttributes || []).concat(dynamicAttrInfo);
 
         let defines = configuration ? configuration.defines() : [];
         defines = defines.concat(fixedDefines.map((define) => `#define ${define}`));
@@ -399,7 +388,7 @@ class Program<Us: UniformBindings> {
          uniformValues: UniformValues<Us>,
          layerID: string,
          layoutVertexBuffer: VertexBuffer,
-         indexBuffer: IndexBuffer,
+         indexBuffer: IndexBuffer | void,
          segments: SegmentVector,
          currentProperties: any,
          zoom: ?number,
@@ -427,6 +416,7 @@ class Program<Us: UniformBindings> {
         }
 
         const primitiveSize = {
+            [gl.POINTS]: 1,
             [gl.LINES]: 2,
             [gl.TRIANGLES]: 3,
             [gl.LINE_STRIP]: 1
@@ -448,20 +438,23 @@ class Program<Us: UniformBindings> {
             );
 
             if (instanceCount && instanceCount > 1) {
+                assert(indexBuffer);
                 gl.drawElementsInstanced(
                     drawMode,
                     segment.primitiveLength * primitiveSize,
                     gl.UNSIGNED_SHORT,
                     segment.primitiveOffset * primitiveSize * 2,
                     instanceCount);
-            } else {
+            } else if (indexBuffer) {
                 gl.drawElements(
                     drawMode,
                     segment.primitiveLength * primitiveSize,
                     gl.UNSIGNED_SHORT,
                     segment.primitiveOffset * primitiveSize * 2);
+            } else {
+                gl.drawArrays(drawMode, segment.vertexOffset, segment.vertexLength);
             }
-            if (drawMode === gl.TRIANGLES) {
+            if (drawMode === gl.TRIANGLES && indexBuffer) {
                 // Handle potential wireframe rendering for current draw call
                 this._drawDebugWireframe(painter, depthMode, stencilMode, colorMode, indexBuffer, segment,
                     currentProperties, zoom, configuration, instanceCount);

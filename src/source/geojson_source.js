@@ -8,7 +8,7 @@ import {ResourceType} from '../util/ajax.js';
 import browser from '../util/browser.js';
 
 import type {Source} from './source.js';
-import type Map from '../ui/map.js';
+import type {Map} from '../ui/map.js';
 import type Dispatcher from '../util/dispatcher.js';
 import type Tile from './tile.js';
 import type Actor from '../util/actor.js';
@@ -115,6 +115,7 @@ class GeoJSONSource extends Evented implements Source {
         this._collectResourceTiming = options.collectResourceTiming;
 
         if (options.maxzoom !== undefined) this.maxzoom = options.maxzoom;
+        if (options.minzoom !== undefined) this.minzoom = options.minzoom;
         if (options.type) this.type = options.type;
         if (options.attribution) this.attribution = options.attribution;
         this.promoteId = options.promoteId;
